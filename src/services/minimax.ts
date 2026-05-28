@@ -1,0 +1,332 @@
+import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+
+interface MiniMaxMusicResponse {
+  data?: {
+    audio?: string;
+    status?: number;
+  };
+  base_resp?: {
+    status_code: number;
+    status_msg: string;
+  };
+}
+
+interface EmotionResult {
+  emotion: string;
+  style: string;
+  prompt: string;
+}
+
+interface MoodProfile {
+  mood: string;
+  style: string;
+  tempo: string;
+  instruments: string;
+}
+
+const MOOD_PROFILES: MoodProfile[] = [
+  { mood: 'sorrow', style: 'melancholic piano ballad', tempo: 'slow', instruments: 'piano, cello, strings' },
+  { mood: 'joy', style: 'bright uplifting pop', tempo: 'upbeat', instruments: 'acoustic guitar, piano, light percussion' },
+  { mood: 'peace', style: 'ambient nature soundscape', tempo: 'very slow', instruments: 'flute, guqin, soft pads' },
+  { mood: 'nostalgia', style: 'wistful folk ballad', tempo: 'moderate slow', instruments: 'erhu, acoustic guitar, soft strings' },
+  { mood: 'passion', style: 'epic cinematic orchestral', tempo: 'dramatic', instruments: 'full orchestra, brass, timpani' },
+  { mood: 'mystery', style: 'dark ambient cinematic', tempo: 'slow eerie', instruments: 'synth pads, low strings, bells' },
+  { mood: 'warmth', style: 'warm romantic orchestral', tempo: 'moderate', instruments: 'violin, harp, warm strings' },
+  { mood: 'loneliness', style: 'sparse minimal piano', tempo: 'very slow', instruments: 'solo piano, soft strings' },
+];
+
+const KEYWORD_MOOD: Record<string, { mood: string; weight: number }> = {
+  // Chinese keywords
+  悲: { mood: 'sorrow', weight: 3 }, 伤: { mood: 'sorrow', weight: 2 },
+  痛: { mood: 'sorrow', weight: 2 }, 哭: { mood: 'sorrow', weight: 3 },
+  泪: { mood: 'sorrow', weight: 3 }, 恨: { mood: 'sorrow', weight: 2 },
+  孤: { mood: 'loneliness', weight: 3 }, 独: { mood: 'loneliness', weight: 2 },
+  愁: { mood: 'sorrow', weight: 2 }, 怨: { mood: 'sorrow', weight: 2 },
+  忧: { mood: 'sorrow', weight: 1 }, 离: { mood: 'sorrow', weight: 2 },
+  别: { mood: 'sorrow', weight: 2 }, 丧: { mood: 'sorrow', weight: 3 },
+  暗: { mood: 'sorrow', weight: 1 }, 灰: { mood: 'sorrow', weight: 1 },
+  寒: { mood: 'sorrow', weight: 1 }, 冷: { mood: 'sorrow', weight: 1 },
+  碎: { mood: 'sorrow', weight: 2 }, 弃: { mood: 'sorrow', weight: 2 },
+  喜: { mood: 'joy', weight: 3 }, 乐: { mood: 'joy', weight: 2 },
+  欢: { mood: 'joy', weight: 3 }, 笑: { mood: 'joy', weight: 3 },
+  甜: { mood: 'joy', weight: 2 }, 幸: { mood: 'joy', weight: 3 },
+  福: { mood: 'joy', weight: 2 }, 美: { mood: 'joy', weight: 2 },
+  暖: { mood: 'warmth', weight: 2 }, 阳光: { mood: 'joy', weight: 3 },
+  盛: { mood: 'joy', weight: 1 }, 欣: { mood: 'joy', weight: 2 },
+  悦: { mood: 'joy', weight: 3 },
+  静: { mood: 'peace', weight: 3 }, 安: { mood: 'peace', weight: 2 },
+  宁: { mood: 'peace', weight: 3 }, 淡: { mood: 'peace', weight: 2 },
+  清: { mood: 'peace', weight: 2 }, 幽: { mood: 'peace', weight: 2 },
+  柔: { mood: 'peace', weight: 2 }, 梦: { mood: 'peace', weight: 2 },
+  闲: { mood: 'peace', weight: 2 }, 逸: { mood: 'peace', weight: 2 },
+  禅: { mood: 'peace', weight: 3 }, 空: { mood: 'peace', weight: 2 },
+  素: { mood: 'peace', weight: 1 }, 净: { mood: 'peace', weight: 1 },
+  云: { mood: 'peace', weight: 1 }, 月: { mood: 'peace', weight: 1 },
+  风: { mood: 'peace', weight: 1 }, 雨: { mood: 'peace', weight: 1 },
+  雪: { mood: 'peace', weight: 1 }, 露: { mood: 'peace', weight: 1 },
+  雾: { mood: 'peace', weight: 1 },
+  忆: { mood: 'nostalgia', weight: 3 }, 怀: { mood: 'nostalgia', weight: 3 },
+  念: { mood: 'nostalgia', weight: 2 }, 思念: { mood: 'nostalgia', weight: 3 },
+  往昔: { mood: 'nostalgia', weight: 3 }, 曾经: { mood: 'nostalgia', weight: 2 },
+  旧: { mood: 'nostalgia', weight: 2 }, 故: { mood: 'nostalgia', weight: 2 },
+  故乡: { mood: 'nostalgia', weight: 3 }, 童年: { mood: 'nostalgia', weight: 3 },
+  过去: { mood: 'nostalgia', weight: 1 }, 岁: { mood: 'nostalgia', weight: 1 },
+  年: { mood: 'nostalgia', weight: 1 }, 老: { mood: 'nostalgia', weight: 1 },
+  记: { mood: 'nostalgia', weight: 1 },
+  怒: { mood: 'passion', weight: 3 }, 烈: { mood: 'passion', weight: 2 },
+  暴: { mood: 'passion', weight: 2 }, 雷: { mood: 'passion', weight: 2 },
+  火: { mood: 'passion', weight: 2 }, 炎: { mood: 'passion', weight: 1 },
+  热血: { mood: 'passion', weight: 3 }, 壮: { mood: 'passion', weight: 2 },
+  志: { mood: 'passion', weight: 2 }, 慷慨: { mood: 'passion', weight: 3 },
+  激昂: { mood: 'passion', weight: 3 }, 战: { mood: 'passion', weight: 2 },
+  斗: { mood: 'passion', weight: 2 }, 胜: { mood: 'passion', weight: 1 },
+  冲: { mood: 'passion', weight: 1 },
+  秘: { mood: 'mystery', weight: 3 }, 谜: { mood: 'mystery', weight: 3 },
+  疑: { mood: 'mystery', weight: 2 }, 恐: { mood: 'mystery', weight: 2 },
+  怖: { mood: 'mystery', weight: 3 }, 鬼: { mood: 'mystery', weight: 3 },
+  怪: { mood: 'mystery', weight: 2 }, 异: { mood: 'mystery', weight: 2 },
+  幻: { mood: 'mystery', weight: 1 }, 冥: { mood: 'mystery', weight: 2 },
+  魂: { mood: 'mystery', weight: 1 },
+  爱: { mood: 'warmth', weight: 3 }, 情: { mood: 'warmth', weight: 2 },
+  母: { mood: 'warmth', weight: 2 }, 父: { mood: 'warmth', weight: 2 },
+  家: { mood: 'warmth', weight: 2 }, 友: { mood: 'warmth', weight: 2 },
+  亲: { mood: 'warmth', weight: 2 }, 恩: { mood: 'warmth', weight: 2 },
+  侣: { mood: 'warmth', weight: 3 }, 伴: { mood: 'warmth', weight: 2 },
+  护: { mood: 'warmth', weight: 1 }, 宠: { mood: 'warmth', weight: 2 },
+  // English keywords — sorrow
+  sad: { mood: 'sorrow', weight: 3 }, sorrow: { mood: 'sorrow', weight: 3 },
+  cry: { mood: 'sorrow', weight: 3 }, tears: { mood: 'sorrow', weight: 3 },
+  pain: { mood: 'sorrow', weight: 2 }, grief: { mood: 'sorrow', weight: 3 },
+  loss: { mood: 'sorrow', weight: 2 }, mourn: { mood: 'sorrow', weight: 3 },
+  // English keywords — loneliness
+  lonely: { mood: 'loneliness', weight: 3 }, alone: { mood: 'loneliness', weight: 2 },
+  solitude: { mood: 'loneliness', weight: 3 }, isolation: { mood: 'loneliness', weight: 2 },
+  empty: { mood: 'loneliness', weight: 2 }, abandoned: { mood: 'loneliness', weight: 3 },
+  forgotten: { mood: 'loneliness', weight: 2 },
+  // English keywords — joy
+  happy: { mood: 'joy', weight: 3 }, joy: { mood: 'joy', weight: 3 },
+  laugh: { mood: 'joy', weight: 3 }, smile: { mood: 'joy', weight: 3 },
+  celebrate: { mood: 'joy', weight: 2 }, wonderful: { mood: 'joy', weight: 2 },
+  delight: { mood: 'joy', weight: 3 }, cheerful: { mood: 'joy', weight: 2 },
+  // English keywords — peace
+  peace: { mood: 'peace', weight: 3 }, calm: { mood: 'peace', weight: 3 },
+  serene: { mood: 'peace', weight: 3 }, tranquil: { mood: 'peace', weight: 3 },
+  quiet: { mood: 'peace', weight: 2 }, still: { mood: 'peace', weight: 2 },
+  gentle: { mood: 'peace', weight: 2 }, harmony: { mood: 'peace', weight: 2 },
+  // English keywords — nostalgia
+  nostalgia: { mood: 'nostalgia', weight: 3 }, nostalgic: { mood: 'nostalgia', weight: 3 },
+  memory: { mood: 'nostalgia', weight: 2 }, remember: { mood: 'nostalgia', weight: 2 },
+  childhood: { mood: 'nostalgia', weight: 3 }, reminisce: { mood: 'nostalgia', weight: 3 },
+  past: { mood: 'nostalgia', weight: 2 }, longing: { mood: 'nostalgia', weight: 2 },
+  // English keywords — passion
+  passion: { mood: 'passion', weight: 3 }, angry: { mood: 'passion', weight: 3 },
+  rage: { mood: 'passion', weight: 3 }, fury: { mood: 'passion', weight: 3 },
+  fire: { mood: 'passion', weight: 2 }, intense: { mood: 'passion', weight: 2 },
+  fierce: { mood: 'passion', weight: 2 }, battle: { mood: 'passion', weight: 2 },
+  // English keywords — mystery
+  mystery: { mood: 'mystery', weight: 3 }, mysterious: { mood: 'mystery', weight: 3 },
+  dark: { mood: 'mystery', weight: 2 }, fear: { mood: 'mystery', weight: 2 },
+  horror: { mood: 'mystery', weight: 3 }, ghost: { mood: 'mystery', weight: 3 },
+  strange: { mood: 'mystery', weight: 2 }, eerie: { mood: 'mystery', weight: 3 },
+  // English keywords — warmth
+  love: { mood: 'warmth', weight: 3 }, warm: { mood: 'warmth', weight: 2 },
+  heart: { mood: 'warmth', weight: 2 }, embrace: { mood: 'warmth', weight: 2 },
+  family: { mood: 'warmth', weight: 2 }, friend: { mood: 'warmth', weight: 2 },
+  tender: { mood: 'warmth', weight: 2 }, beloved: { mood: 'warmth', weight: 3 },
+  kiss: { mood: 'warmth', weight: 2 }, hug: { mood: 'warmth', weight: 2 },
+};
+
+const THEME_CHARS: Record<string, string> = {
+  spring: '春', summer: '夏', autumn: '秋', winter: '冬',
+  rain: '雨', snow: '雪', wind: '风', moon: '月',
+  flower: '花', mountain: '山', river: '江河湖海流',
+  night: '夜晚暮宵', forest: '林树森木', road: '路道径途',
+  home: '家屋房院', city: '城市街楼', sea: '海涛浪',
+  sky: '天空星日', boat: '船舟帆', bird: '鸟燕雁雀',
+  tea: '茶酒', music: '歌声琴笛', dream: '梦',
+  light: '光阳灯烛', shadow: '影',
+};
+
+export function analyzeEmotion(text: string): EmotionResult {
+  const scores: Record<string, number> = {};
+  for (const p of MOOD_PROFILES) {
+    scores[p.mood] = 0;
+  }
+
+  for (const [keyword, info] of Object.entries(KEYWORD_MOOD)) {
+    const count = (text.match(new RegExp(keyword, 'g')) || []).length;
+    if (count > 0) {
+      scores[info.mood] += count * info.weight;
+    }
+  }
+
+  let bestMood = 'peace';
+  let bestScore = 0;
+  for (const [mood, score] of Object.entries(scores)) {
+    if (score > bestScore) {
+      bestScore = score;
+      bestMood = mood;
+    }
+  }
+
+  const profile = MOOD_PROFILES.find((p) => p.mood === bestMood) || MOOD_PROFILES[2];
+
+  const themes: string[] = [];
+  for (const [theme, chars] of Object.entries(THEME_CHARS)) {
+    for (const ch of chars) {
+      if (text.includes(ch)) {
+        themes.push(theme);
+        break;
+      }
+    }
+  }
+
+  const themeHint =
+    themes.length > 0
+      ? `with ${themes.slice(0, 3).join(' and ')} atmosphere, `
+      : '';
+
+  const prompt = [
+    `${profile.style} instrumental music`,
+    `${profile.tempo} tempo`,
+    `featuring ${profile.instruments}`,
+    `conveying a ${profile.mood} mood`,
+  ]
+    .filter(Boolean)
+    .join(', ')
+    + `, ${themeHint}no vocals, pure instrumental, suitable for storytelling`;
+
+  return {
+    emotion: profile.mood,
+    style: profile.style,
+    prompt,
+  };
+}
+
+export interface MusicOptions {
+  musicType?: 'instrumental' | 'song';
+  musicMood?: string;
+  musicGenre?: string;
+}
+
+const GENRE_STYLES: Record<string, string> = {
+  chinese_folk: 'Chinese folk style with pentatonic melodies, featuring erhu, guzheng, dizi, pipa',
+  classical: 'Western classical style with orchestral arrangements, featuring strings, woodwinds, piano',
+  pop: 'modern pop style with catchy melodies, featuring acoustic guitar, piano, light beats',
+  opera: 'Chinese opera style with dramatic vocals, featuring gong, erhu, suona, percussion',
+};
+
+export const MOOD_LABELS: Record<string, string> = {
+  sorrow: '悲伤',
+  joy: '喜悦',
+  passion: '激情',
+  peace: '平静',
+  mystery: '神秘',
+  nostalgia: '怀旧',
+  warmth: '温暖',
+  loneliness: '孤独',
+};
+
+export async function generateMusic(text: string, options: MusicOptions = {}): Promise<{ audioUrl: string }> {
+  const apiKey = process.env.MINIMAX_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('MiniMax API credentials not configured');
+  }
+
+  let profile: MoodProfile | undefined;
+
+  if (options.musicMood) {
+    profile = MOOD_PROFILES.find((p) => p.mood === options.musicMood);
+  }
+
+  if (!profile) {
+    const detected = analyzeEmotion(text);
+    profile = MOOD_PROFILES.find((p) => p.mood === detected.emotion) || MOOD_PROFILES[2];
+  }
+
+  const isInstrumental = options.musicType !== 'song';
+  const genreHint = options.musicGenre ? GENRE_STYLES[options.musicGenre] || '' : '';
+  const moodLabel = MOOD_LABELS[profile.mood] || profile.mood;
+
+  const prompt = [
+    `${moodLabel}${isInstrumental ? ' instrumental' : ' song'} in ${profile.style} style`,
+    `${profile.tempo} tempo`,
+    `featuring ${profile.instruments}`,
+    genreHint,
+    isInstrumental ? 'no vocals, pure instrumental' : 'with emotional vocals in Chinese, lyrical',
+    'suitable for storytelling, 20 seconds duration',
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  const payload: Record<string, unknown> = {
+    model: 'music-2.6',
+    prompt,
+    is_instrumental: isInstrumental,
+    output_format: 'url',
+    audio_setting: {
+      sample_rate: 44100,
+      bitrate: 256000,
+      format: 'mp3',
+    },
+  };
+
+  if (!isInstrumental) {
+    payload.lyrics = text.slice(0, 200);
+  }
+
+  const response = await axios.post<MiniMaxMusicResponse>(
+    `${process.env.MINIMAX_API_URL || 'https://api.minimaxi.com/v1'}/music_generation`,
+    payload,
+    {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  if (response.data.base_resp && response.data.base_resp.status_code !== 0) {
+    throw new Error(response.data.base_resp.status_msg || 'MiniMax API error');
+  }
+
+  if (!response.data.data?.audio) {
+    throw new Error('No audio URL in response');
+  }
+
+  return { audioUrl: response.data.data.audio };
+}
+
+export async function downloadMusicFile(fileUrl: string, storyId: number): Promise<string> {
+  const apiKey = process.env.MINIMAX_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('MiniMax API credentials not configured');
+  }
+
+  const musicDir = path.join(
+    process.env.STORAGE_PATH || path.join(process.cwd(), 'storage'),
+    'music'
+  );
+
+  if (!fs.existsSync(musicDir)) {
+    fs.mkdirSync(musicDir, { recursive: true });
+  }
+
+  const timestamp = Date.now();
+  const filePath = path.join(musicDir, `music_${storyId}_${timestamp}.mp3`);
+
+  const fileResponse = await axios.get(fileUrl, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    responseType: 'arraybuffer',
+  });
+
+  fs.writeFileSync(filePath, Buffer.from(fileResponse.data));
+
+  return filePath;
+}
