@@ -83,11 +83,16 @@ router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
     const userId = req.userId!;
     const db = getDatabase();
 
+    console.log('[CreateOrder] Request:', { userId, productId, provider, quantity, couponCode: req.body.couponCode || null });
+
     const product = db.prepare('SELECT * FROM products WHERE id = ? AND is_active = 1').get(productId) as ProductRow | undefined;
     if (!product) {
+      console.warn('[CreateOrder] Product not found:', { productId, userId });
       res.status(400).json({ error: 'Invalid product' });
       return;
     }
+
+    console.log('[CreateOrder] Product found:', { productId, name: product.name, type: product.type, priceCents: product.price_cents });
 
     let totalCents = product.price_cents * Math.max(1, parseInt(String(quantity), 10) || 1);
     let isUpgrade = false;
@@ -102,6 +107,8 @@ router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
         ORDER BY s.expires_at DESC LIMIT 1
       `).get(userId) as ActiveSubRow | undefined;
 
+      console.log('[CreateOrder] Subscription check:', { userId, hasActiveSub: !!activeSub, activeSubPlanType: activeSub?.plan_type || null });
+
       if (activeSub) {
         // Monthly → Yearly upgrade: discount by the monthly price
         if (product.type === 'yearly' && activeSub.plan_type === 'monthly') {
@@ -109,6 +116,7 @@ router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
           isUpgrade = true;
           console.log('[CreateOrder] Upgrade detected:', { userId, fromPlan: activeSub.plan_type, toPlan: product.type, originalCents: product.price_cents, discountCents: activeSub.price_cents, finalCents: totalCents });
         } else {
+          console.warn('[CreateOrder] Blocked — active subscription exists:', { userId, activePlanType: activeSub.plan_type, requestedPlanType: product.type });
           res.status(400).json({
             error: `已有 ${activeSub.plan_name} 订阅（至 ${activeSub.expires_at.slice(0, 10)}），到期后可续费`,
           });
@@ -141,8 +149,15 @@ router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
       VALUES (?, ?, ?, 'CNY', ?, ?, 'pending')
     `).run(userId, planType, totalCents / 100, totalCents, provider);
 
+    const newOrderId = Number(result.lastInsertRowid);
+    console.log('[CreateOrder] Order created:', { orderId: newOrderId, userId, planType, totalCents, provider, amount: totalCents / 100 });
+
+    // Verify the order was persisted
+    const verify = db.prepare('SELECT id, user_id, status FROM orders WHERE id = ?').get(newOrderId) as any;
+    console.log('[CreateOrder] Persistence verified:', { orderId: newOrderId, found: !!verify, dbUserId: verify?.user_id });
+
     res.json({ success: true, data: {
-      orderId: Number(result.lastInsertRowid),
+      orderId: newOrderId,
       productName: product.name,
       amountCents: totalCents,
       provider,
@@ -158,9 +173,13 @@ router.post('/orders/:id/pay', authMiddleware, async (req: AuthRequest, res: Res
   const orderId = Number(req.params.id);
   const db = getDatabase();
 
+  console.log('[Pay] Looking up order:', { orderId, userId: req.userId });
+
   const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, req.userId) as OrderRow | undefined;
   if (!order) {
-    console.error('[Pay] Order not found:', { orderId, userId: req.userId });
+    // Check if order exists at all (regardless of user)
+    const anyOrder = db.prepare('SELECT id, user_id, status FROM orders WHERE id = ?').get(orderId) as any;
+    console.error('[Pay] Order not found:', { orderId, userId: req.userId, existsAtAll: !!anyOrder, ownerUserId: anyOrder?.user_id, ownerStatus: anyOrder?.status });
     res.status(404).json({ error: 'Order not found' }); return;
   }
   if (order.status !== 'pending') {
