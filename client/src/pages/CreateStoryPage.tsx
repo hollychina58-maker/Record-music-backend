@@ -51,7 +51,12 @@ export function CreateStoryPage() {
         try {
           const result = await apiService.generateMusic(story.id, story.content, { musicType, musicMood, musicGenre });
           if (result.remainingFreeCount !== undefined) {
-            useAuthStore.getState().updateFreeMusicCount(result.remainingFreeCount);
+            const { fetchCurrentUser, updateFreeMusicCount } = useAuthStore.getState();
+            if (user.hasActiveSubscription) {
+              await fetchCurrentUser();
+            } else {
+              updateFreeMusicCount(result.remainingFreeCount);
+            }
           }
           navigate('/');
         } catch (err: any) {
