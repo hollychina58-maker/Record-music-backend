@@ -107,6 +107,7 @@ router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
         if (product.type === 'yearly' && activeSub.plan_type === 'monthly') {
           totalCents = Math.max(0, totalCents - activeSub.price_cents);
           isUpgrade = true;
+          console.log('[CreateOrder] Upgrade detected:', { userId, fromPlan: activeSub.plan_type, toPlan: product.type, originalCents: product.price_cents, discountCents: activeSub.price_cents, finalCents: totalCents });
         } else {
           res.status(400).json({
             error: `已有 ${activeSub.plan_name} 订阅（至 ${activeSub.expires_at.slice(0, 10)}），到期后可续费`,
@@ -158,13 +159,20 @@ router.post('/orders/:id/pay', authMiddleware, async (req: AuthRequest, res: Res
   const db = getDatabase();
 
   const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, req.userId) as OrderRow | undefined;
-  if (!order) { res.status(404).json({ error: 'Order not found' }); return; }
-  if (order.status !== 'pending') { res.status(400).json({ error: 'Order already processed' }); return; }
+  if (!order) {
+    console.error('[Pay] Order not found:', { orderId, userId: req.userId });
+    res.status(404).json({ error: 'Order not found' }); return;
+  }
+  if (order.status !== 'pending') {
+    console.warn('[Pay] Order not pending:', { orderId, status: order.status });
+    res.status(400).json({ error: 'Order already processed' }); return;
+  }
 
   const providerName = order.payment_provider || 'paypal';
   try {
     const provider = getPaymentProvider(providerName);
     const amountCents = order.total_cents ?? Math.round(order.amount * 100);
+    console.log('[Pay] Order details:', { orderId, planType: order.plan_type, totalCents: order.total_cents, amount: order.amount, amountCents, provider: providerName });
     const result = await provider.createPayment({
       orderId: order.id,
       amountCents,
@@ -186,10 +194,19 @@ router.post('/orders/:id/verify', authMiddleware, async (req: AuthRequest, res: 
   const db = getDatabase();
 
   const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, req.userId) as OrderRow & { payment_id: string | null } | undefined;
-  if (!order) { res.status(404).json({ error: 'Order not found' }); return; }
+  if (!order) {
+    console.error('[Verify] Order not found:', { orderId, userId: req.userId });
+    res.status(404).json({ error: 'Order not found' }); return;
+  }
   if (order.status === 'completed') { res.json({ success: true, data: { orderId, status: 'completed' } }); return; }
-  if (order.status !== 'pending') { res.status(400).json({ error: 'Order already processed' }); return; }
-  if (!order.payment_id) { res.status(400).json({ error: 'Payment not initiated' }); return; }
+  if (order.status !== 'pending') {
+    console.warn('[Verify] Order not pending:', { orderId, status: order.status });
+    res.status(400).json({ error: 'Order already processed' }); return;
+  }
+  if (!order.payment_id) {
+    console.warn('[Verify] No payment_id on order:', { orderId });
+    res.status(400).json({ error: 'Payment not initiated' }); return;
+  }
 
   const providerName = order.payment_provider || 'paypal';
   const provider = getPaymentProvider(providerName);
