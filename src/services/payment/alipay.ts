@@ -10,15 +10,18 @@ function getClient(): AlipaySdk {
     throw new Error('Alipay not configured: missing ALIPAY_APP_ID, ALIPAY_PRIVATE_KEY, or ALIPAY_PUBLIC_KEY');
   }
 
-  const gateway = process.env.ALIPAY_SANDBOX === 'true'
-    ? 'https://openapi-sandbox.dl.alipaydev.com/gateway.do'
-    : 'https://openapi.alipay.com/gateway.do';
+  const isSandbox = process.env.ALIPAY_SANDBOX === 'true';
 
   return new AlipaySdk({
     appId,
     privateKey: privateKey.replace(/\\n/g, '\n'),
     alipayPublicKey: alipayPublicKey.replace(/\\n/g, '\n'),
-    gateway,
+    gateway: isSandbox
+      ? 'https://openapi-sandbox.dl.alipaydev.com/gateway.do'
+      : 'https://openapi.alipay.com/gateway.do',
+    endpoint: isSandbox
+      ? 'https://openapi-sandbox.dl.alipaydev.com'
+      : undefined,
     signType: 'RSA2',
     timeout: 15000,
   });
