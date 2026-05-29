@@ -19,9 +19,6 @@ function getClient(): AlipaySdk {
     gateway: isSandbox
       ? 'https://openapi-sandbox.dl.alipaydev.com/gateway.do'
       : 'https://openapi.alipay.com/gateway.do',
-    endpoint: isSandbox
-      ? 'https://openapi-sandbox.dl.alipaydev.com'
-      : undefined,
     signType: 'RSA2',
     timeout: 15000,
   });
@@ -35,81 +32,83 @@ export function createAlipayProvider(): PaymentProvider {
       const alipay = getClient();
 
       const outTradeNo = `ORDER_${input.orderId}_${Date.now()}`;
-      const body: Record<string, unknown> = {
+      const bizContent: Record<string, unknown> = {
         out_trade_no: outTradeNo,
         total_amount: (input.amountCents / 100).toFixed(2),
         subject: input.description,
+        body: `墨韵订单 #${input.orderId}`,
+        timeout_express: '15h',
       };
 
-      const curlOptions: Record<string, unknown> = { body };
+      const params: Record<string, unknown> = { bizContent };
       const notifyUrl = process.env.ALIPAY_NOTIFY_URL;
       if (notifyUrl) {
-        (curlOptions as any).query = { notify_url: notifyUrl };
+        params.notifyUrl = notifyUrl;
       }
 
-      console.log('[Alipay] Creating precreate (V3):', {
+      console.log('[Alipay] Creating precreate payment:', {
         outTradeNo,
-        amount: body.total_amount,
-        subject: body.subject,
+        amount: bizContent.total_amount,
+        subject: bizContent.subject,
         sandbox: process.env.ALIPAY_SANDBOX === 'true',
       });
 
-      const { data } = await alipay.curl('POST', '/v3/alipay/trade/precreate', curlOptions as any);
+      const result = await alipay.exec('alipay.trade.precreate', params);
 
-      console.log('[Alipay] Precreate (V3) response:', {
-        code: (data as any).code,
-        msg: (data as any).msg,
-        subCode: (data as any).sub_code,
-        subMsg: (data as any).sub_msg,
-        outTradeNo: (data as any).out_trade_no,
-        qrCode: (data as any).qr_code,
+      console.log('[Alipay] Precreate response:', {
+        code: result.code,
+        msg: result.msg,
+        subCode: result.subCode,
+        subMsg: result.subMsg,
+        outTradeNo: result.outTradeNo,
+        qrCode: result.qrCode,
       });
 
-      const code = (data as any).code || (data as any).Code;
-      if (code !== '10000') {
-        throw new Error(`Alipay error: ${(data as any).sub_msg || (data as any).msg}`);
+      if (result.code !== '10000') {
+        throw new Error(`Alipay error: ${result.subMsg || result.msg}`);
       }
 
-      const qrCode = (data as any).qr_code;
+      const qrCode = result.qrCode || result.qr_code;
+
       if (!qrCode) {
-        console.error('[Alipay] No qr_code in response:', JSON.stringify(data));
-        throw new Error('Alipay returned success but no QR code');
+        console.error('[Alipay] No qrCode in response. Raw keys:', Object.keys(result));
+        throw new Error('Alipay returned success but no QR code URL');
       }
 
-      return {
-        providerOrderId: outTradeNo,
-        qrCode,
-      };
+      return { providerOrderId: result.outTradeNo, qrCode };
     },
 
     async verifyPayment(providerOrderId: string): Promise<VerificationResult> {
       const alipay = getClient();
 
-      console.log('[Alipay] Querying trade (V3):', providerOrderId);
+      console.log('[Alipay] Querying trade:', providerOrderId);
 
-      const { data } = await alipay.curl('POST', '/v3/alipay/trade/query', {
-        body: { out_trade_no: providerOrderId },
+      const result = await alipay.exec('alipay.trade.query', {
+        bizContent: { out_trade_no: providerOrderId },
       });
 
-      const code = (data as any).code || (data as any).Code;
-      const subCode = (data as any).sub_code || (data as any).subCode;
-      const subMsg = (data as any).sub_msg || (data as any).subMsg;
-      const tradeStatus = ((data as any).trade_status || (data as any).tradeStatus || 'UNKNOWN') as string;
+      const code = result.code;
+      const subCode = result.subCode || result.subMsg;
+      const subMsg = result.subMsg;
+      const tradeStatus = (result.tradeStatus || result.trade_status || 'UNKNOWN') as string;
 
-      console.log('[Alipay] Trade query (V3) result:', {
+      console.log('[Alipay] Trade query result:', {
         code,
-        msg: (data as any).msg,
+        msg: result.msg,
         subCode,
         subMsg,
         tradeStatus,
-        tradeNo: (data as any).trade_no,
-        totalAmount: (data as any).total_amount,
-        buyerLogonId: (data as any).buyer_logon_id,
-        buyerUserId: (data as any).buyer_user_id,
+        tradeNo: result.tradeNo || result.trade_no,
+        totalAmount: result.totalAmount || result.total_amount,
       });
 
       if (code !== '10000') {
-        return { verified: false, providerOrderId, status: subCode || subMsg || 'ERROR', notFound: subCode === 'ACQ.TRADE_NOT_EXIST' };
+        return {
+          verified: false,
+          providerOrderId,
+          status: subCode || subMsg || 'ERROR',
+          notFound: subCode === 'ACQ.TRADE_NOT_EXIST',
+        };
       }
 
       const verified = tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED';
