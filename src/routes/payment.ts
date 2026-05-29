@@ -267,6 +267,11 @@ router.post('/orders/:id/verify', authMiddleware, async (req: AuthRequest, res: 
       res.json({ success: true, data: { orderId, status: 'completed' } });
     } else {
       // Don't overwrite order status — keep it 'pending' so polling can retry
+      console.log('[Verify] Payment not yet completed — will keep polling:', {
+        orderId,
+        providerOrderId: order.payment_id,
+        tradeStatus: verified.status,
+      });
       res.status(400).json({ success: false, error: 'Payment not completed' });
     }
   } catch (err: any) {
