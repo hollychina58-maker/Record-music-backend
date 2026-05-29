@@ -32,12 +32,20 @@ export function createAlipayProvider(): PaymentProvider {
       const alipay = getClient();
 
       const outTradeNo = `ORDER_${input.orderId}_${Date.now()}`;
-      const bizContent = {
+      const bizContent: Record<string, unknown> = {
         out_trade_no: outTradeNo,
         total_amount: (input.amountCents / 100).toFixed(2),
         subject: input.description,
         body: `墨韵订单 #${input.orderId}`,
+        timeout_express: '15h',
       };
+
+      // Sandbox: buyer_id is mandatory for the trade to be queryable
+      const sandboxBuyerId = process.env.ALIPAY_SANDBOX_BUYER_ID;
+      if (sandboxBuyerId && process.env.ALIPAY_SANDBOX === 'true') {
+        bizContent.buyer_id = sandboxBuyerId;
+        console.log('[Alipay] Using sandbox buyer_id:', sandboxBuyerId);
+      }
 
       console.log('[Alipay] Creating precreate payment:', {
         outTradeNo,
