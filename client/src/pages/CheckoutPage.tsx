@@ -197,8 +197,8 @@ export function CheckoutPage() {
             // Non-success response — could be "not paid yet", keep polling
           } catch (err: any) {
             const status = err?.response?.status;
-            // Terminal errors: stop polling and show error
-            if (status === 404 || status === 400) {
+            // Only 404 (order not found) is terminal; 400 (not paid yet) keeps polling
+            if (status === 404) {
               pollRef.current = null;
               setProcessing(false);
               setError(err?.response?.data?.error || t('checkout.payFail'));
