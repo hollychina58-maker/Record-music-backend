@@ -59,6 +59,7 @@ export function CheckoutPage() {
   const resetPaymentState = () => {
     if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
     pollCountRef.current = 0;
+    payingRef.current = false;
     setOrderId(null);
     setStep('review');
     setShowQr(false);
@@ -167,6 +168,7 @@ export function CheckoutPage() {
   };
 
   const creatingRef = useRef(false);
+  const payingRef = useRef(false);
 
   const handleCreateOrder = async () => {
     if (!product || creatingRef.current) return;
@@ -198,6 +200,8 @@ export function CheckoutPage() {
   const handlePay = async () => {
     if (!orderId) return;
     if (!product) return;
+    if (payingRef.current) return;
+    payingRef.current = true;
     // Clear any leftover polling from a previous order
     if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
     setProcessing(true);
@@ -280,6 +284,7 @@ export function CheckoutPage() {
       setError(status === 404 ? `${t('checkout.createOrderFail')} — ${msg}` : msg);
     } finally {
       setProcessing(false);
+      payingRef.current = false;
     }
   };
 

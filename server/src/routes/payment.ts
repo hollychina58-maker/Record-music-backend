@@ -337,23 +337,30 @@ router.post('/alipay/notify', express.raw({ type: 'application/x-www-form-urlenc
       return;
     }
 
+    const isSandbox = process.env.ALIPAY_SANDBOX === 'true';
     const alipay = new AlipaySdk({
       appId,
       privateKey: privateKey.replace(/\\n/g, '\n'),
       alipayPublicKey: alipayPublicKey.replace(/\\n/g, '\n'),
+      gateway: isSandbox
+        ? 'https://openapi-sandbox.dl.alipaydev.com/gateway.do'
+        : 'https://openapi.alipay.com/gateway.do',
       signType: 'RSA2',
+      timeout: 15000,
     });
-
-    if (!alipay.checkNotifySign(rawBody, true)) {
-      console.warn('[Alipay Notify] Signature verification failed');
-      res.status(400).send('fail');
-      return;
-    }
 
     // Parse raw URL-encoded body
     const params = Object.fromEntries(
       rawBody.split('&').map((p) => p.split('=').map(decodeURIComponent))
     ) as Record<string, string>;
+
+    // Try V2 signature first, fall back to V2 raw
+    const signOk = alipay.checkNotifySignV2(params) || alipay.checkNotifySign(rawBody, true);
+    if (!signOk) {
+      console.warn('[Alipay Notify] Signature verification failed');
+      res.status(400).send('fail');
+      return;
+    }
 
     const tradeStatus = params.trade_status;
     const outTradeNo = params.out_trade_no;
