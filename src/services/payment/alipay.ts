@@ -36,55 +36,38 @@ export function createAlipayProvider(): PaymentProvider {
         out_trade_no: outTradeNo,
         total_amount: (input.amountCents / 100).toFixed(2),
         subject: input.description,
-        body: `墨韵订单 #${input.orderId}`,
-        timeout_express: '15h',
+        product_code: 'FAST_INSTANT_TRADE_PAY',
       };
 
-      // Sandbox: buyer_id is mandatory for the trade to be queryable
-      const sandboxBuyerId = process.env.ALIPAY_SANDBOX_BUYER_ID;
-      if (sandboxBuyerId && process.env.ALIPAY_SANDBOX === 'true') {
-        bizContent.buyer_id = sandboxBuyerId;
-        console.log('[Alipay] Using sandbox buyer_id:', sandboxBuyerId);
+      const pageParams: Record<string, unknown> = {
+        bizContent,
+        method: 'GET',
+      };
+
+      const notifyUrl = process.env.ALIPAY_NOTIFY_URL;
+      if (notifyUrl) {
+        pageParams.notifyUrl = notifyUrl;
       }
 
-      console.log('[Alipay] Creating precreate payment:', {
+      const returnUrl = process.env.ALIPAY_RETURN_URL;
+      if (returnUrl) {
+        pageParams.returnUrl = returnUrl.replace('{orderId}', String(input.orderId));
+      }
+
+      console.log('[Alipay] Creating page pay:', {
         outTradeNo,
         amount: bizContent.total_amount,
         subject: bizContent.subject,
         sandbox: process.env.ALIPAY_SANDBOX === 'true',
       });
 
-      const execParams: Record<string, unknown> = { bizContent };
-      const notifyUrl = process.env.ALIPAY_NOTIFY_URL;
-      if (notifyUrl) {
-        execParams.notifyUrl = notifyUrl;
-      }
+      const redirectUrl = alipay.pageExecute('alipay.trade.page.pay', 'GET', pageParams);
 
-      const result = await alipay.exec('alipay.trade.precreate', execParams);
-
-      console.log('[Alipay] Precreate response:', {
-        code: result.code,
-        msg: result.msg,
-        subCode: result.subCode,
-        subMsg: result.subMsg,
-        outTradeNo: result.outTradeNo,
-        qrCode: result.qrCode,
-      });
-
-      if (result.code !== '10000') {
-        throw new Error(`Alipay error: ${result.subMsg || result.msg}`);
-      }
-
-      const qrCode = result.qrCode || result.qr_code;
-
-      if (!qrCode) {
-        console.error('[Alipay] No qrCode in response. Raw keys:', Object.keys(result));
-        throw new Error('Alipay returned success but no QR code URL');
-      }
+      console.log('[Alipay] Page pay URL generated:', outTradeNo);
 
       return {
-        providerOrderId: result.outTradeNo,
-        qrCode,
+        providerOrderId: outTradeNo,
+        redirectUrl,
       };
     },
 
