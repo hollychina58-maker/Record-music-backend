@@ -42,6 +42,7 @@ export function CheckoutPage() {
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollCountRef = useRef(0);
   const MAX_POLL_COUNT = 30; // 30 × 4s = 2 minutes max
+  const [polling, setPolling] = useState(false);
 
   // Two-step flow: review → payment
   const [step, setStep] = useState<'review' | 'payment'>('review');
@@ -175,10 +176,12 @@ export function CheckoutPage() {
 
         // Poll for payment status (recursive setTimeout, max ~2 minutes)
         pollCountRef.current = 0;
+        setPolling(true);
         const poll = async () => {
           pollCountRef.current++;
           if (pollCountRef.current > MAX_POLL_COUNT) {
             pollRef.current = null;
+            setPolling(false);
             setProcessing(false);
             setError(t('checkout.payTimeout'));
             return;
@@ -187,6 +190,7 @@ export function CheckoutPage() {
             const verifyRes = await apiService.clientPost('/payments/orders/' + orderId + '/verify');
             if (verifyRes.success) {
               pollRef.current = null;
+              setPolling(false);
               setStatusMsg(t('checkout.paySuccess'));
               const { updateFreeMusicCount } = useAuthStore.getState();
               const profile = await apiService.getMyProfile();
@@ -200,6 +204,7 @@ export function CheckoutPage() {
             // Only 404 (order not found) is terminal; 400 (not paid yet) keeps polling
             if (status === 404) {
               pollRef.current = null;
+              setPolling(false);
               setProcessing(false);
               setError(err?.response?.data?.error || t('checkout.payFail'));
               return;
@@ -387,6 +392,7 @@ export function CheckoutPage() {
                   <img src={qrDataUrl} alt={t('checkout.qrTitle', { provider: providerLabels[provider] })} className="qr-image" />
                   <p className="qr-title">{t('checkout.qrTitle', { provider: providerLabels[provider] })}</p>
                   <p className="qr-amount">¥{(totalCents / 100).toFixed(2)}</p>
+                  {polling && <p className="qr-hint">{t('checkout.polling')}</p>}
                 </>
               ) : qrLoading ? (
                 <>

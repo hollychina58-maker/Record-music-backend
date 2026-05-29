@@ -159,6 +159,7 @@
   "checkout.payFail": "Payment failed",
   "checkout.paySuccess": "Payment successful!",
   "checkout.payTimeout": "Payment verification timeout. Check order status.",
+  "checkout.polling": "Awaiting payment confirmation...",
   "share.copyLink": "Copy Link",
   "share.copied": "Copied",
   "comment.title": "Comments",
