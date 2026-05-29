@@ -97,7 +97,9 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 initDatabase();
-seedDefaultStory();
+seedDefaultStory().catch((err) => {
+  console.error('[Seed] Fatal error seeding default story:', err instanceof Error ? err.message : err);
+});
 
 const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

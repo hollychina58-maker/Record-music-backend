@@ -16,6 +16,7 @@
     "@types/geoip-lite": "^1.4.4",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.7.4",
+    "alipay-sdk": "^4.14.0",
     "axios": "^1.7.7",
     "bcrypt": "^5.1.1",
     "better-sqlite3": "^11.5.0",

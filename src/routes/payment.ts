@@ -1,7 +1,8 @@
-import { Router, Request, Response } from 'express';
+import express, { Router, Request, Response } from 'express';
 import { getDatabase } from '../models/database.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { getPaymentProvider } from '../services/payment/index.js';
+import { AlipaySdk } from 'alipay-sdk';
 
 const router = Router();
 
@@ -19,9 +20,20 @@ interface OrderRow {
   user_id: number;
   plan_type: string;
   amount: number;
+  total_cents: number | null;
   status: string;
   payment_provider: string | null;
   payment_id: string | null;
+}
+
+interface ActiveSubRow {
+  id: number;
+  product_id: number;
+  user_id: number;
+  plan_name: string;
+  plan_type: string;
+  price_cents: number;
+  expires_at: string;
 }
 
 // GET /api/payments/products — List active products
@@ -67,7 +79,7 @@ router.get('/subscription', authMiddleware, (req: AuthRequest, res: Response) =>
 // POST /api/payments/orders — Create order
 router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
-    const { productId, provider = 'paypal' } = req.body;
+    const { productId, provider = 'paypal', quantity = 1 } = req.body;
     const userId = req.userId!;
     const db = getDatabase();
 
@@ -77,7 +89,32 @@ router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
       return;
     }
 
-    let totalCents = product.price_cents;
+    let totalCents = product.price_cents * Math.max(1, parseInt(String(quantity), 10) || 1);
+    let isUpgrade = false;
+
+    // Check active subscription for non-per_use products
+    if (product.type !== 'per_use') {
+      const activeSub = db.prepare(`
+        SELECT s.*, p.name as plan_name, p.type as plan_type, p.price_cents
+        FROM subscriptions s
+        JOIN products p ON s.product_id = p.id
+        WHERE s.user_id = ? AND s.status = 'active' AND s.expires_at > datetime('now')
+        ORDER BY s.expires_at DESC LIMIT 1
+      `).get(userId) as ActiveSubRow | undefined;
+
+      if (activeSub) {
+        // Monthly → Yearly upgrade: discount by the monthly price
+        if (product.type === 'yearly' && activeSub.plan_type === 'monthly') {
+          totalCents = Math.max(0, totalCents - activeSub.price_cents);
+          isUpgrade = true;
+        } else {
+          res.status(400).json({
+            error: `已有 ${activeSub.plan_name} 订阅（至 ${activeSub.expires_at.slice(0, 10)}），到期后可续费`,
+          });
+          return;
+        }
+      }
+    }
 
     // Apply coupon if provided
     if (req.body.couponCode) {
@@ -96,10 +133,12 @@ router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
       }
     }
 
+    const planType = isUpgrade ? `${product.type}:upgrade` : product.type;
+
     const result = db.prepare(`
       INSERT INTO orders (user_id, plan_type, amount, currency, total_cents, payment_provider, status)
       VALUES (?, ?, ?, 'CNY', ?, ?, 'pending')
-    `).run(userId, product.type, totalCents / 100, totalCents, provider);
+    `).run(userId, planType, totalCents / 100, totalCents, provider);
 
     res.json({ success: true, data: {
       orderId: Number(result.lastInsertRowid),
@@ -125,16 +164,17 @@ router.post('/orders/:id/pay', authMiddleware, async (req: AuthRequest, res: Res
   const providerName = order.payment_provider || 'paypal';
   try {
     const provider = getPaymentProvider(providerName);
+    const amountCents = order.total_cents ?? Math.round(order.amount * 100);
     const result = await provider.createPayment({
       orderId: order.id,
-      amountCents: order.amount * 100,
+      amountCents,
       currency: 'CNY',
       description: `墨韵 - ${order.plan_type}`,
     });
 
     db.prepare('UPDATE orders SET payment_id = ? WHERE id = ?').run(result.providerOrderId, orderId);
 
-    res.json({ success: true, data: { redirectUrl: result.redirectUrl, providerOrderId: result.providerOrderId } });
+    res.json({ success: true, data: { redirectUrl: result.redirectUrl, qrCode: result.qrCode, providerOrderId: result.providerOrderId } });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Payment initiation failed' });
   }
@@ -147,6 +187,7 @@ router.post('/orders/:id/verify', authMiddleware, async (req: AuthRequest, res: 
 
   const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, req.userId) as OrderRow & { payment_id: string | null } | undefined;
   if (!order) { res.status(404).json({ error: 'Order not found' }); return; }
+  if (order.status === 'completed') { res.json({ success: true, data: { orderId, status: 'completed' } }); return; }
   if (order.status !== 'pending') { res.status(400).json({ error: 'Order already processed' }); return; }
   if (!order.payment_id) { res.status(400).json({ error: 'Payment not initiated' }); return; }
 
@@ -162,42 +203,170 @@ router.post('/orders/:id/verify', authMiddleware, async (req: AuthRequest, res: 
       ).run(verified.providerOrderId, orderId);
 
       // Get the product associated with this order
-      // The order stores plan_type as the product type (per_use, monthly, yearly)
+      // plan_type may include ":upgrade" suffix for month→year upgrades
+      const baseType = order.plan_type.replace(':upgrade', '');
       const product = db.prepare(
         "SELECT * FROM products WHERE type = ? AND is_active = 1 LIMIT 1"
-      ).get(order.plan_type) as ProductRow | undefined;
+      ).get(baseType) as ProductRow | undefined;
 
       if (product) {
         if (product.type === 'per_use') {
           const limit = product.music_limit || 1;
-          db.prepare('UPDATE users SET free_music_count = free_music_count + ? WHERE id = ?').run(limit, order.user_id);
+          const unitPrice = product.price_cents || 1;
+          const quantity = Math.round((order.total_cents ?? (order.amount * 100)) / unitPrice);
+          db.prepare('UPDATE users SET free_music_count = free_music_count + ? WHERE id = ?')
+            .run(limit * quantity, order.user_id);
         } else {
-          // monthly or yearly — create subscription
+          // monthly or yearly — create/update subscription
           const days = product.type === 'yearly' ? 365 : 30;
           const existing = db.prepare('SELECT id FROM subscriptions WHERE user_id = ?').get(order.user_id) as any;
+          const userRow = db.prepare('SELECT free_music_count FROM users WHERE id = ?').get(order.user_id) as any;
+          const carryOver = userRow?.free_music_count || 0;
+
+          // For yearly (unlimited), music_remaining stays NULL.
+          // For monthly, add carry-over per-use credits to the plan limit.
+          const musicRemaining = product.music_limit !== null
+            ? (product.music_limit + carryOver)
+            : null;
 
           if (existing) {
             db.prepare(`
               UPDATE subscriptions SET product_id = ?, starts_at = datetime('now'),
                 expires_at = datetime('now', '+${days} days'), music_remaining = ?, status = 'active'
               WHERE user_id = ?
-            `).run(product.id, product.music_limit, order.user_id);
+            `).run(product.id, musicRemaining, order.user_id);
           } else {
             db.prepare(`
               INSERT INTO subscriptions (user_id, product_id, starts_at, expires_at, music_remaining)
               VALUES (?, ?, datetime('now'), datetime('now', '+${days} days'), ?)
-            `).run(order.user_id, product.id, product.music_limit);
+            `).run(order.user_id, product.id, musicRemaining);
           }
+
+          // Reset per-use counter since credits are now folded into subscription
+          db.prepare('UPDATE users SET free_music_count = 0 WHERE id = ?').run(order.user_id);
         }
       }
 
       res.json({ success: true, data: { orderId, status: 'completed' } });
     } else {
-      db.prepare("UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(verified.status, orderId);
+      // Don't overwrite order status — keep it 'pending' so polling can retry
       res.status(400).json({ success: false, error: 'Payment not completed' });
     }
   } catch (err: any) {
     res.status(502).json({ error: err.message || 'Payment verification failed' });
+  }
+});
+
+// POST /api/payments/alipay/notify — Alipay async payment notification (no auth — called by Alipay)
+router.post('/alipay/notify', express.raw({ type: 'application/x-www-form-urlencoded' }), (req: Request, res: Response) => {
+  const rawBody = req.body instanceof Buffer ? req.body.toString('utf-8') : '';
+
+  if (!rawBody) {
+    console.error('[Alipay Notify] No raw body');
+    res.status(400).send('fail');
+    return;
+  }
+
+  try {
+    const appId = process.env.ALIPAY_APP_ID;
+    const privateKey = process.env.ALIPAY_PRIVATE_KEY;
+    const alipayPublicKey = process.env.ALIPAY_PUBLIC_KEY;
+
+    if (!appId || !privateKey || !alipayPublicKey) {
+      console.error('[Alipay Notify] Alipay not configured');
+      res.status(500).send('fail');
+      return;
+    }
+
+    const alipay = new AlipaySdk({
+      appId,
+      privateKey: privateKey.replace(/\\n/g, '\n'),
+      alipayPublicKey: alipayPublicKey.replace(/\\n/g, '\n'),
+      signType: 'RSA2',
+    });
+
+    if (!alipay.checkNotifySign(rawBody, true)) {
+      console.warn('[Alipay Notify] Signature verification failed');
+      res.status(400).send('fail');
+      return;
+    }
+
+    // Parse raw URL-encoded body
+    const params = Object.fromEntries(
+      rawBody.split('&').map((p) => p.split('=').map(decodeURIComponent))
+    ) as Record<string, string>;
+
+    const tradeStatus = params.trade_status;
+    const outTradeNo = params.out_trade_no;
+
+    console.log('[Alipay Notify] Verified:', { outTradeNo, tradeStatus });
+
+    if (tradeStatus !== 'TRADE_SUCCESS' && tradeStatus !== 'TRADE_FINISHED') {
+      console.log('[Alipay Notify] Status not terminal:', tradeStatus);
+      res.send('success');
+      return;
+    }
+
+    const db = getDatabase();
+    const order = db.prepare(
+      'SELECT * FROM orders WHERE payment_id = ? AND status = ?'
+    ).get(outTradeNo, 'pending') as OrderRow | undefined;
+
+    if (!order) {
+      console.log('[Alipay Notify] Order not found or already processed:', outTradeNo);
+      res.send('success');
+      return;
+    }
+
+    db.prepare(
+      "UPDATE orders SET status = 'completed', payment_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    ).run(outTradeNo, order.id);
+
+    const baseType = order.plan_type.replace(':upgrade', '');
+    const product = db.prepare(
+      'SELECT * FROM products WHERE type = ? AND is_active = 1 LIMIT 1'
+    ).get(baseType) as ProductRow | undefined;
+
+    if (product) {
+      if (product.type === 'per_use') {
+        const limit = product.music_limit || 1;
+        const unitPrice = product.price_cents || 1;
+        const quantity = Math.round((order.total_cents ?? (order.amount * 100)) / unitPrice);
+        db.prepare('UPDATE users SET free_music_count = free_music_count + ? WHERE id = ?')
+          .run(limit * quantity, order.user_id);
+      } else {
+        const days = product.type === 'yearly' ? 365 : 30;
+        const existing = db.prepare('SELECT id FROM subscriptions WHERE user_id = ?').get(order.user_id) as any;
+        const userRow = db.prepare('SELECT free_music_count FROM users WHERE id = ?').get(order.user_id) as any;
+        const carryOver = userRow?.free_music_count || 0;
+
+        const musicRemaining = product.music_limit !== null
+          ? (product.music_limit + carryOver)
+          : null;
+
+        if (existing) {
+          db.prepare(`
+            UPDATE subscriptions SET product_id = ?, starts_at = datetime('now'),
+              expires_at = datetime('now', '+${days} days'), music_remaining = ?, status = 'active'
+            WHERE user_id = ?
+          `).run(product.id, musicRemaining, order.user_id);
+        } else {
+          db.prepare(`
+            INSERT INTO subscriptions (user_id, product_id, starts_at, expires_at, music_remaining)
+            VALUES (?, ?, datetime('now'), datetime('now', '+${days} days'), ?)
+          `).run(order.user_id, product.id, musicRemaining);
+        }
+
+        db.prepare('UPDATE users SET free_music_count = 0 WHERE id = ?').run(order.user_id);
+      }
+    }
+
+    console.log('[Alipay Notify] Order activated:', order.id);
+    res.send('success');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown';
+    console.error('[Alipay Notify] Error:', message);
+    res.status(500).send('fail');
   }
 });
 

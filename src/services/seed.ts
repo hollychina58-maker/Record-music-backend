@@ -1,4 +1,5 @@
 import { getDatabase } from '../models/database.js';
+import { generateMusic, downloadMusicFile } from './minimax.js';
 
 const DEFAULT_STORY = {
   title: '墨韵初章',
@@ -15,7 +16,7 @@ const DEFAULT_STORY = {
   country_code: 'CN',
 };
 
-export function seedDefaultStory(): void {
+export async function seedDefaultStory(): Promise<void> {
   const db = getDatabase();
 
   const existing = db.prepare(
@@ -33,9 +34,35 @@ export function seedDefaultStory(): void {
 
   const storyId = Number(result.lastInsertRowid);
 
-  db.prepare(
+  const musicResult = db.prepare(
     "INSERT INTO music (story_id, status, style) VALUES (?, 'pending', '辽阔悠扬')"
   ).run(storyId);
 
-  console.log(`[Seed] Default story created (id: ${storyId})`);
+  const musicId = Number(musicResult.lastInsertRowid);
+
+  console.log(`[Seed] Default story created (id: ${storyId}), music record (id: ${musicId})`);
+
+  // Try to generate real music via MiniMax
+  if (!process.env.MINIMAX_API_KEY) {
+    console.log('[Seed] MiniMax API key not configured — skipping music generation');
+    return;
+  }
+
+  try {
+    console.log('[Seed] Generating music for default story...');
+    const { audioUrl } = await generateMusic(DEFAULT_STORY.content, {
+      musicType: 'instrumental',
+      musicMood: 'peace',
+      musicGenre: 'chinese_folk',
+    });
+    console.log('[Seed] Music generated, downloading...');
+    const filePath = await downloadMusicFile(audioUrl, storyId);
+    db.prepare(
+      "UPDATE music SET status = 'completed', file_path = ? WHERE id = ?"
+    ).run(filePath, musicId);
+    console.log(`[Seed] Music saved to ${filePath}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.warn(`[Seed] Music generation failed: ${message} — music will remain pending`);
+  }
 }

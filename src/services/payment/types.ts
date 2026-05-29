@@ -8,6 +8,7 @@ export interface CreatePaymentInput {
 export interface PaymentResult {
   providerOrderId: string;
   redirectUrl?: string;
+  qrCode?: string;
 }
 
 export interface VerificationResult {
