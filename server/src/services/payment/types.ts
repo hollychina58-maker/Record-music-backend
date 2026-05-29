@@ -15,6 +15,7 @@ export interface VerificationResult {
   verified: boolean;
   providerOrderId: string;
   status: string;
+  notFound?: boolean;
 }
 
 export interface PaymentProvider {

@@ -314,6 +314,13 @@
   margin: 0 0 var(--space-1);
 }
 
+.poll-counter {
+  font-family: var(--font-mono, var(--font-ui));
+  font-size: var(--text-2xs);
+  color: var(--ink-wash);
+  opacity: 0.6;
+}
+
 .qr-note {
   font-family: var(--font-ui);
   font-size: var(--text-2xs);

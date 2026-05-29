@@ -302,8 +302,14 @@ router.post('/orders/:id/verify', authMiddleware, async (req: AuthRequest, res: 
         orderId,
         providerOrderId: order.payment_id,
         tradeStatus: verified.status,
+        notFound: verified.notFound || false,
       });
-      res.status(400).json({ success: false, error: 'Payment not completed' });
+      res.status(400).json({
+        success: false,
+        error: 'Payment not completed',
+        notFound: verified.notFound || false,
+        tradeStatus: verified.status,
+      });
     }
   } catch (err: any) {
     res.status(502).json({ error: err.message || 'Payment verification failed' });

@@ -43,6 +43,7 @@ export function CheckoutPage() {
   const pollCountRef = useRef(0);
   const MAX_POLL_COUNT = 30; // 30 × 4s = 2 minutes max
   const [polling, setPolling] = useState(false);
+  const [pollStatusMsg, setPollStatusMsg] = useState('');
 
   // Two-step flow: review → payment
   const [step, setStep] = useState<'review' | 'payment'>('review');
@@ -64,6 +65,7 @@ export function CheckoutPage() {
     setQrDataUrl(null);
     setQrLoading(false);
     setPolling(false);
+    setPollStatusMsg('');
     setError('');
     setStatusMsg('');
     setProcessing(false);
@@ -255,6 +257,11 @@ export function CheckoutPage() {
               setError(err?.response?.data?.error || t('checkout.payFail'));
               return;
             }
+            // 400: not paid yet — check if trade not found (haven't scanned) vs processing
+            if (status === 400) {
+              const data = err?.response?.data;
+              setPollStatusMsg(data?.notFound ? t('checkout.awaitingScan') : t('checkout.polling'));
+            }
             // Network or 5xx errors: keep retrying
           }
           const delay = Math.min(4000 + (pollCountRef.current - 1) * 2000, 30000);
@@ -442,7 +449,14 @@ export function CheckoutPage() {
                   <img src={qrDataUrl} alt={t('checkout.qrTitle', { provider: providerLabels[provider] })} className="qr-image" />
                   <p className="qr-title">{t('checkout.qrTitle', { provider: providerLabels[provider] })}</p>
                   <p className="qr-amount">¥{(totalCents / 100).toFixed(2)}</p>
-                  {polling && <p className="qr-hint">{t('checkout.polling')}</p>}
+                  {polling && (
+                    <p className="qr-hint">
+                      {pollStatusMsg || t('checkout.polling')}
+                      {pollCountRef.current > 0 && (
+                        <span className="poll-counter"> ({pollCountRef.current}/{MAX_POLL_COUNT})</span>
+                      )}
+                    </p>
+                  )}
                 </>
               ) : qrLoading ? (
                 <>
