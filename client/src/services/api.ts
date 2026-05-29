@@ -167,8 +167,8 @@ class ApiService {
     storyId: number,
     text: string,
     options?: { musicType?: string; musicMood?: string; musicGenre?: string }
-  ): Promise<{ id: number; status: string; filePath: string; remainingFreeCount?: number }> {
-    const response = await this.client.post<{ data: { id: number; status: string; filePath: string; remainingFreeCount?: number } }>(
+  ): Promise<{ id: number; status: string; filePath: string; remainingFreeCount?: number; subscriptionRemaining?: number | null }> {
+    const response = await this.client.post<{ data: { id: number; status: string; filePath: string; remainingFreeCount?: number; subscriptionRemaining?: number | null } }>(
       '/music/generate',
       { storyId, text, ...options },
       { timeout: 180000 }

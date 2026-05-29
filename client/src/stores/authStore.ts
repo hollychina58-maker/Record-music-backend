@@ -25,6 +25,7 @@ interface AuthState {
   fetchCurrentUser: () => Promise<void>;
   fetchUsage: () => Promise<{ freeMusicCount: number; totalUsageCount: number; usageHistory: unknown[] }>;
   updateFreeMusicCount: (count: number) => void;
+  updateUser: (partial: Partial<User>) => void;
   clearError: () => void;
 }
 
@@ -206,6 +207,13 @@ export const useAuthStore = create<AuthState>()(
               freeMusicCount: count,
             },
           });
+        }
+      },
+
+      updateUser: (partial: Partial<User>) => {
+        const user = get().user;
+        if (user) {
+          set({ user: { ...user, ...partial } });
         }
       },
 
