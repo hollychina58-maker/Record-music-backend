@@ -41,7 +41,7 @@ export function CheckoutPage() {
   const [qrLoading, setQrLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollCountRef = useRef(0);
-  const MAX_POLL_COUNT = 30; // 30 × 4s = 2 minutes max
+  const MAX_POLL_COUNT = 45; // 45 × up-to-30s ≈ ~3-4 minutes max
   const [polling, setPolling] = useState(false);
   const [pollStatusMsg, setPollStatusMsg] = useState('');
 
@@ -141,9 +141,8 @@ export function CheckoutPage() {
         if (res.success) {
           if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
           setStatusMsg(t('checkout.paySuccess'));
-          const { updateFreeMusicCount } = useAuthStore.getState();
-          const profile = await apiService.getMyProfile();
-          updateFreeMusicCount(profile.freeMusicCount);
+          const { fetchCurrentUser } = useAuthStore.getState();
+          await fetchCurrentUser();
           // Clean the order param from URL so it doesn't interfere with future checkouts
           const next = new URLSearchParams(searchParams);
           next.delete('order');
@@ -244,9 +243,8 @@ export function CheckoutPage() {
               pollRef.current = null;
               setPolling(false);
               setStatusMsg(t('checkout.paySuccess'));
-              const { updateFreeMusicCount } = useAuthStore.getState();
-              const profile = await apiService.getMyProfile();
-              updateFreeMusicCount(profile.freeMusicCount);
+              const { fetchCurrentUser } = useAuthStore.getState();
+              await fetchCurrentUser();
               setTimeout(() => navigate('/my-space'), 1500);
               return;
             }
