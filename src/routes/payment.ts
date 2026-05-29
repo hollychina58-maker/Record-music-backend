@@ -97,6 +97,18 @@ router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
     let totalCents = product.price_cents * Math.max(1, parseInt(String(quantity), 10) || 1);
     let isUpgrade = false;
 
+    // Block per_use purchase when user has unlimited subscription (yearly)
+    if (product.type === 'per_use') {
+      const unlimitedSub = db.prepare(
+        "SELECT id FROM subscriptions WHERE user_id = ? AND status = 'active' AND expires_at > datetime('now') AND music_remaining IS NULL"
+      ).get(userId);
+      if (unlimitedSub) {
+        console.warn('[CreateOrder] Blocked per_use — user has unlimited subscription:', { userId });
+        res.status(400).json({ error: '年度会员无限使用，无需按次购买' });
+        return;
+      }
+    }
+
     // Check active subscription for non-per_use products
     if (product.type !== 'per_use') {
       const activeSub = db.prepare(`
