@@ -104,7 +104,8 @@ export function createAlipayProvider(): PaymentProvider {
       });
 
       if (result.code !== '10000') {
-        return { verified: false, providerOrderId, status: result.subCode || result.subMsg || 'ERROR' };
+        const subCode = result.subCode || result.subMsg || 'ERROR';
+        return { verified: false, providerOrderId, status: subCode, notFound: subCode === 'ACQ.TRADE_NOT_EXIST' };
       }
 
       const verified = tradeStatus === 'TRADE_SUCCESS' || tradeStatus === 'TRADE_FINISHED';
