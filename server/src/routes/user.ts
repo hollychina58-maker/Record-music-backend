@@ -101,6 +101,10 @@ router.post('/auth/login', async (req: Request, res: Response) => {
     { expiresIn: '7d' as const }
   );
 
+  const sub = db.prepare(
+    "SELECT music_remaining FROM subscriptions WHERE user_id = ? AND status = 'active' AND expires_at > datetime('now')"
+  ).get(user.id) as { music_remaining: number | null } | undefined;
+
   res.json({
     success: true,
     data: {
@@ -110,6 +114,8 @@ router.post('/auth/login', async (req: Request, res: Response) => {
       avatar: user.avatar,
       role: user.role,
       freeMusicCount: user.free_music_count,
+      hasActiveSubscription: !!sub,
+      subscriptionMusicRemaining: sub?.music_remaining ?? null,
       token,
     },
   });
@@ -129,6 +135,11 @@ router.get('/users/me', authMiddleware, (req: Request, res: Response) => {
     return;
   }
 
+  // Check active subscription for music generation eligibility
+  const sub = db.prepare(
+    "SELECT music_remaining FROM subscriptions WHERE user_id = ? AND status = 'active' AND expires_at > datetime('now')"
+  ).get(userId) as { music_remaining: number | null } | undefined;
+
   res.json({
     success: true,
     data: {
@@ -138,6 +149,8 @@ router.get('/users/me', authMiddleware, (req: Request, res: Response) => {
       avatar: user.avatar,
       freeMusicCount: user.free_music_count,
       createdAt: user.created_at,
+      hasActiveSubscription: !!sub,
+      subscriptionMusicRemaining: sub?.music_remaining ?? null,
     },
   });
 });

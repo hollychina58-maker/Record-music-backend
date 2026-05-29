@@ -140,9 +140,12 @@ export function CreateStoryPage() {
                 disabled={!canGenerateMusic()}
               />
               <span>
-                {canGenerateMusic()
-                  ? t('create.musicToggle', { count: user.freeMusicCount })
-                  : t('create.noFreeMusic')}
+                {(() => {
+                  if (!canGenerateMusic()) return t('create.noFreeMusic');
+                  if (user.hasActiveSubscription && user.subscriptionMusicRemaining === null) return t('payment.unlimitedMusic');
+                  if (user.hasActiveSubscription) return t('create.musicToggle', { count: user.subscriptionMusicRemaining ?? 0 });
+                  return t('create.musicToggle', { count: user.freeMusicCount });
+                })()}
               </span>
               {!canGenerateMusic() && (
                 <Link to="/payment" className="inline-purchase-link">{t('create.buyNow')}</Link>

@@ -62,7 +62,9 @@ export function PaymentPage() {
   const showPlans = !subscription || showAllPlans;
 
   const canPurchase = (product: Product): boolean => {
-    if (!subscription || product.type === 'per_use') return true;
+    if (!subscription) return true;
+    // Per-use is only blocked when subscriber has unlimited (yearly)
+    if (product.type === 'per_use') return subscription.musicRemaining !== null;
     // monthly subscribers can only upgrade to yearly
     if (subscription.planType === 'monthly' && product.type === 'yearly') return true;
     return false;

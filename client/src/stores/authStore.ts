@@ -7,6 +7,8 @@ interface User {
   nickname: string;
   avatar: string | null;
   freeMusicCount: number;
+  hasActiveSubscription: boolean;
+  subscriptionMusicRemaining: number | null;
   role?: string;
   createdAt?: string;
 }
@@ -60,6 +62,8 @@ export const useAuthStore = create<AuthState>()(
               avatar: data.data.avatar,
               role: data.data.role,
               freeMusicCount: data.data.freeMusicCount,
+              hasActiveSubscription: data.data.hasActiveSubscription || false,
+              subscriptionMusicRemaining: data.data.subscriptionMusicRemaining ?? null,
             },
             token: data.data.token,
             isAuthenticated: true,
@@ -95,6 +99,8 @@ export const useAuthStore = create<AuthState>()(
               avatar: null,
               role: data.data.role,
               freeMusicCount: data.data.freeMusicCount,
+              hasActiveSubscription: false,
+              subscriptionMusicRemaining: null,
             },
             token: data.data.token,
             isAuthenticated: true,
@@ -139,6 +145,8 @@ export const useAuthStore = create<AuthState>()(
               nickname: data.data.nickname,
               avatar: data.data.avatar,
               freeMusicCount: data.data.freeMusicCount,
+              hasActiveSubscription: data.data.hasActiveSubscription || false,
+              subscriptionMusicRemaining: data.data.subscriptionMusicRemaining ?? null,
               createdAt: data.data.createdAt,
             },
             isLoading: false,
@@ -210,7 +218,14 @@ export const useAuthStore = create<AuthState>()(
 
 export const canGenerateMusic = (): boolean => {
   const { user } = useAuthStore.getState();
-  return user !== null && user.freeMusicCount > 0;
+  if (!user) return false;
+  // Yearly subscription = unlimited (music_remaining is NULL)
+  if (user.hasActiveSubscription && user.subscriptionMusicRemaining === null) return true;
+  // Monthly subscription with remaining credits
+  if (user.hasActiveSubscription && (user.subscriptionMusicRemaining ?? 0) > 0) return true;
+  // Per-use free credits (no subscription)
+  if (user.freeMusicCount > 0) return true;
+  return false;
 };
 
 export const getAuthHeader = (): Record<string, string> => {
