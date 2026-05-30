@@ -9,7 +9,49 @@ import fs from 'fs';
 
 const router = Router();
 
-router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response) => {
+// Fire-and-forget async music generation (credits deducted only on success)
+async function processMusicAsync(
+  userId: number,
+  storyId: number,
+  musicId: number,
+  text: string,
+  musicOptions: MusicOptions,
+  isSubscription: boolean,
+  subscriptionId: number | null,
+) {
+  const db = getDatabase();
+  try {
+    const result = await generateMusic(text, musicOptions);
+    const filePath = await downloadMusicFile(result.audioUrl, storyId);
+
+    db.transaction(() => {
+      // Deduct credits only after successful generation
+      if (isSubscription && subscriptionId) {
+        db.prepare(
+          'UPDATE subscriptions SET music_remaining = music_remaining - 1 WHERE id = ? AND music_remaining > 0'
+        ).run(subscriptionId);
+      } else if (!isSubscription) {
+        db.prepare(
+          'UPDATE users SET free_music_count = free_music_count - 1 WHERE id = ? AND free_music_count > 0'
+        ).run(userId);
+      }
+
+      db.prepare(
+        'UPDATE music SET status = ?, file_path = ? WHERE id = ?'
+      ).run('completed', filePath, musicId);
+
+      db.prepare(
+        'INSERT INTO music_usage (user_id, story_id, music_id) VALUES (?, ?, ?)'
+      ).run(userId, storyId, musicId);
+    })();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown';
+    console.error('[Music] Async generation failed:', message);
+    db.prepare("UPDATE music SET status = 'failed' WHERE id = ?").run(musicId);
+  }
+}
+
+router.post('/generate', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const { storyId, text, musicType, musicMood, musicGenre } = req.body;
 
@@ -28,7 +70,6 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
 
     const userId = req.userId as number;
 
-    // Check subscription first, then free count
     const user = db.prepare(
       'SELECT free_music_count FROM users WHERE id = ?'
     ).get(userId) as { free_music_count: number } | undefined;
@@ -42,18 +83,17 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
       "SELECT id, music_remaining FROM subscriptions WHERE user_id = ? AND status = 'active' AND expires_at > datetime('now')"
     ).get(userId) as { id: number; music_remaining: number | null } | undefined;
 
-    const hasFreeGenerations = subscription
+    const hasCredits = subscription
       ? (subscription.music_remaining === null || subscription.music_remaining > 0)
       : user.free_music_count > 0;
 
-    if (!hasFreeGenerations) {
+    if (!hasCredits) {
       res.status(402).json({ error: 'No music generation remaining. Please purchase a plan.' });
       return;
     }
 
     const musicOptions: MusicOptions = { musicType, musicMood, musicGenre };
 
-    // Determine style label for database
     let styleLabel: string;
     if (musicMood && MOOD_LABELS[musicMood]) {
       styleLabel = MOOD_LABELS[musicMood];
@@ -63,61 +103,18 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
     }
 
     const musicRecord = db.prepare(
-      'INSERT INTO music (story_id, status, style) VALUES (?, ?, ?)'
-    ).run(storyId, 'generating', styleLabel);
+      "INSERT INTO music (story_id, status, style) VALUES (?, 'pending', ?)"
+    ).run(storyId, styleLabel);
 
     const musicId = Number(musicRecord.lastInsertRowid);
+    const isSubscription = !!subscription;
+    const subscriptionId = subscription?.id ?? null;
 
-    const result = await generateMusic(text, musicOptions);
+    // Fire-and-forget: credits deducted only on successful generation
+    processMusicAsync(userId, storyId, musicId, text, musicOptions, isSubscription, subscriptionId);
 
-    const filePath = await downloadMusicFile(result.audioUrl, storyId);
-
-    // Deduct from subscription first, then free count — in a transaction
-    const deduct = db.transaction(() => {
-      if (subscription) {
-        if (subscription.music_remaining === null) {
-          // Yearly — unlimited, no deduction needed
-        } else {
-          db.prepare(
-            'UPDATE subscriptions SET music_remaining = music_remaining - 1 WHERE id = ? AND music_remaining > 0'
-          ).run(subscription.id);
-        }
-      } else {
-        db.prepare(
-          'UPDATE users SET free_music_count = free_music_count - 1 WHERE id = ? AND free_music_count > 0'
-        ).run(userId);
-      }
-
-      db.prepare(
-        'UPDATE music SET status = ?, file_path = ? WHERE id = ?'
-      ).run('completed', filePath, musicId);
-
-      db.prepare(
-        'INSERT INTO music_usage (user_id, story_id, music_id) VALUES (?, ?, ?)'
-      ).run(userId, storyId, musicId);
-    });
-
-    deduct();
-
-    // Get updated counts
-    const updatedUser = db.prepare(
-      'SELECT free_music_count FROM users WHERE id = ?'
-    ).get(userId) as { free_music_count: number };
-    const updatedSub = subscription
-      ? db.prepare('SELECT music_remaining FROM subscriptions WHERE id = ?').get(subscription.id) as { music_remaining: number }
-      : null;
-
-    res.status(201).json({
-      data: {
-        id: musicId,
-        storyId,
-        status: 'completed',
-        emotion: styleLabel,
-        style: styleLabel,
-        filePath,
-        remainingFreeCount: updatedUser.free_music_count,
-        subscriptionRemaining: updatedSub?.music_remaining ?? undefined,
-      },
+    res.status(202).json({
+      data: { musicId, status: 'pending' },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -132,6 +129,23 @@ router.get('/by-story/:storyId', (req: Request, res: Response) => {
   ).all(req.params.storyId);
 
   res.json({ data: musicRecords });
+});
+
+router.get('/status/:id', (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const music = db.prepare('SELECT id, status, file_path, style FROM music WHERE id = ?').get(req.params.id) as any;
+
+    if (!music) {
+      res.status(404).json({ error: 'Music not found' });
+      return;
+    }
+
+    res.json({ id: music.id, status: music.status, filePath: music.file_path, style: music.style });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: message });
+  }
 });
 
 router.get('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
