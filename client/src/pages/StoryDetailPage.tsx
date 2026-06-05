@@ -34,8 +34,23 @@ export function StoryDetailPage() {
   const prevAuthRef = useRef(isAuthenticated);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const removePendingFromStorage = (musicId: number) => {
+    try {
+      const raw = localStorage.getItem('mo_pending_music');
+      if (!raw) return;
+      const arr = JSON.parse(raw) as Array<{ musicId: number; storyId: number; createdAt: number }>;
+      const filtered = arr.filter((x) => x.musicId !== musicId);
+      if (filtered.length === 0) localStorage.removeItem('mo_pending_music');
+      else localStorage.setItem('mo_pending_music', JSON.stringify(filtered));
+    } catch { /* ignore */ }
+  };
+
   const pollUntilReady = (musicId: number) => {
     if (pollRef.current) clearInterval(pollRef.current);
+    // Claim ownership: remove this musicId from the App-level poller so only
+    // this page handles the notification while the user is looking at it.
+    removePendingFromStorage(musicId);
+
     pollRef.current = setInterval(async () => {
       try {
         const result = await apiService.pollMusicStatus(musicId);

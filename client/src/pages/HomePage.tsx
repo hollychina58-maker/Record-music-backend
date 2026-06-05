@@ -32,6 +32,26 @@ export function HomePage() {
   const { t } = useLanguage();
   const geo = useGeo();
 
+  useEffect(() => {
+    // Wait until geo is resolved; while loading show skeleton
+    if (geo.loading) {
+      setLoading(true);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(false);
+
+    apiService
+      .getStories({ language: geo.language, countryCode: geo.countryCode })
+      .then((data) => { if (!cancelled) setStories(data); })
+      .catch(() => { if (!cancelled) setLoadError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [geo.loading, geo.language, geo.countryCode]);
+
   const loadStories = () => {
     setLoading(true);
     setLoadError(false);
@@ -41,10 +61,6 @@ export function HomePage() {
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   };
-
-  useEffect(() => {
-    loadStories();
-  }, [geo.language, geo.countryCode]);
 
   return (
     <div className="home-page">

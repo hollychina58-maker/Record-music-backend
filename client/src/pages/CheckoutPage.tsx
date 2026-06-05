@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useGeoCurrency } from '../hooks/useGeoCurrency';
 import { apiService } from '../services/api';
 import QRCode from 'qrcode';
 import './CheckoutPage.css';
@@ -104,6 +105,7 @@ export function CheckoutPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { t } = useLanguage();
+  const currency = useGeoCurrency();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -429,9 +431,13 @@ export function CheckoutPage() {
 
               <div className="plan-price-display">
                 {isUpgrade && (
-                  <span className="plan-price-original">¥{(product.priceCents / 100).toFixed(0)}</span>
+                  <span className="plan-price-original">
+                    {currency.symbol}{currency.formatAmount(currency.toDisplayCents(product.priceCents))}
+                  </span>
                 )}
-                <span className="plan-price-main">¥{(unitPriceCents / 100).toFixed(2)}</span>
+                <span className="plan-price-main">
+                  {currency.symbol}{currency.formatAmount(currency.toDisplayCents(unitPriceCents))}
+                </span>
                 <span className="plan-price-unit">
                   {isPerUse ? ' / 次' : product.type === 'monthly' ? ' / 月' : ' / 年'}
                 </span>
@@ -486,7 +492,9 @@ export function CheckoutPage() {
             {/* Total */}
             <div className="checkout-total-row">
               <span className="checkout-total-label">应付金额</span>
-              <span className="checkout-total-amount">¥{(totalCents / 100).toFixed(2)}</span>
+              <span className="checkout-total-amount">
+                {currency.symbol}{currency.formatAmount(currency.toDisplayCents(totalCents))}
+              </span>
             </div>
 
             {error && <p className="payment-error">{error}</p>}
@@ -505,7 +513,9 @@ export function CheckoutPage() {
             {/* Order recap */}
             <div className="payment-recap">
               <div className="payment-recap-name">{product.name}</div>
-              <div className="payment-recap-amount">¥{(totalCents / 100).toFixed(2)}</div>
+              <div className="payment-recap-amount">
+                {currency.symbol}{currency.formatAmount(currency.toDisplayCents(totalCents))}
+              </div>
             </div>
 
             <section className="payment-method">
@@ -566,7 +576,7 @@ export function CheckoutPage() {
                 : <>
                     {PROVIDER_ICONS[provider]}
                     <span style={{ marginLeft: 8 }}>
-                      用 {activeProviderCfg.label} 支付 ¥{(totalCents / 100).toFixed(2)}
+                      用 {activeProviderCfg.label} 支付 {currency.symbol}{currency.formatAmount(currency.toDisplayCents(totalCents))}
                     </span>
                   </>
               }
@@ -588,7 +598,7 @@ export function CheckoutPage() {
                   </div>
                   <img src={qrDataUrl} alt={`${activeProviderCfg.label}付款码`} className="qr-image" />
                   <p className="qr-title">扫码完成支付</p>
-                  <p className="qr-amount">¥{(totalCents / 100).toFixed(2)}</p>
+                  <p className="qr-amount">{currency.symbol}{currency.formatAmount(currency.toDisplayCents(totalCents))}</p>
                   {polling && (
                     <p className="qr-hint">{pollStatusMsg || t('checkout.polling')}</p>
                   )}

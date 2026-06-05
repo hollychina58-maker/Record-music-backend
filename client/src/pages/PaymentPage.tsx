@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useGeoCurrency } from '../hooks/useGeoCurrency';
 import { apiService } from '../services/api';
 import './PaymentPage.css';
 
@@ -61,6 +62,7 @@ function DaysLeft({ expiresAt }: { expiresAt: string }) {
 export function PaymentPage() {
   const navigate = useNavigate();
   useLanguage();
+  const currency = useGeoCurrency();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [products, setProducts] = useState<Product[]>([]);
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
@@ -217,10 +219,12 @@ export function PaymentPage() {
                     {/* Price */}
                     <div className="pp-plan-price-wrap">
                       {upgrade && (
-                        <span className="pp-plan-price-orig">¥{(product.priceCents / 100).toFixed(0)}</span>
+                        <span className="pp-plan-price-orig">
+                          {currency.symbol}{currency.formatAmount(currency.toDisplayCents(product.priceCents))}
+                        </span>
                       )}
-                      <span className="pp-plan-currency">¥</span>
-                      <span className="pp-plan-amount">{(price / 100).toFixed(0)}</span>
+                      <span className="pp-plan-currency">{currency.symbol}</span>
+                      <span className="pp-plan-amount">{currency.formatAmount(currency.toDisplayCents(price))}</span>
                       <span className="pp-plan-period">{meta.period}</span>
                     </div>
 

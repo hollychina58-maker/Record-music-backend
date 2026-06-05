@@ -7,9 +7,11 @@ const COUNTRY_TO_UI_LANGUAGE: Record<string, string> = {
   SA: 'ar', AE: 'ar', EG: 'ar', QA: 'ar', KW: 'ar', OM: 'ar', BH: 'ar',
   MA: 'ar', DZ: 'ar', TN: 'ar', LB: 'ar', JO: 'ar', IQ: 'ar', SY: 'ar',
   YE: 'ar', LY: 'ar', SD: 'ar', PS: 'ar',
+  JP: 'ja',
+  KR: 'ko',
 };
 
-const SUPPORTED_LANGUAGES = ['zh', 'en', 'fr', 'de', 'ru', 'ar'];
+const SUPPORTED_LANGUAGES = ['zh', 'en', 'fr', 'de', 'ru', 'ar', 'ja', 'ko'];
 
 export function countryToUILanguage(countryCode: string | undefined | null): string {
   if (!countryCode) return 'en';

@@ -5,7 +5,6 @@ import { apiService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { canGenerateMusic } from '../stores/authStore';
 import { useLanguage } from '../i18n/LanguageContext';
-import { useToast } from '../components/Toast';
 import './CreateStoryPage.css';
 
 export function CreateStoryPage() {
@@ -13,7 +12,6 @@ export function CreateStoryPage() {
   const user = useAuthStore(state => state.user);
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const { t } = useLanguage();
-  const { addToast } = useToast();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -79,13 +77,11 @@ export function CreateStoryPage() {
       if (withMusic && user) {
         try {
           const { musicId } = await apiService.generateMusic(story.id, story.content, { musicType, musicMood, musicGenre });
-          // Register in localStorage so App-level PendingMusicPoller tracks it
+          // Register in localStorage so App-level PendingMusicPoller tracks it.
+          // The banner will appear automatically when generation completes.
           const pending = JSON.parse(localStorage.getItem('mo_pending_music') || '[]');
           pending.push({ musicId, storyId: story.id, createdAt: Date.now() });
           localStorage.setItem('mo_pending_music', JSON.stringify(pending));
-          // Show persistent loading toast — the poller in App.tsx will fire a
-          // success toast with a "去听听" link when generation completes.
-          addToast('loading', '🎵 正在为你的故事生成专属配乐，稍后会通知你…');
           navigate(`/story/${story.id}`);
         } catch (err: any) {
           if (err?.response?.status === 402) {

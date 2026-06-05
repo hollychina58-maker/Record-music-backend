@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { ToastContainer, useToast } from './components/Toast';
+import { MusicBannerProvider, useMusicBanner } from './components/MusicBanner';
 import { useLanguage } from './i18n/LanguageContext';
 import { apiService } from './services/api';
 import { useAuthStore } from './stores/authStore';
@@ -37,6 +38,7 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 
 function PendingMusicPoller() {
   const { addToast } = useToast();
+  const { showMusicBanner } = useMusicBanner();
 
   useEffect(() => {
     const KEY = 'mo_pending_music';
@@ -55,10 +57,7 @@ function PendingMusicPoller() {
           const status = await apiService.pollMusicStatus(item.musicId);
           if (status.status === 'completed') {
             useAuthStore.getState().fetchCurrentUser();
-            addToast('success', '配乐已生成！', {
-              duration: 8000,
-              action: { label: '去听听', onClick: () => { window.location.href = `/story/${item.storyId}`; } },
-            });
+            showMusicBanner(item.storyId);
           } else if (status.status === 'failed') {
             addToast('error', '配乐生成失败，请重试');
           } else if (Date.now() - item.createdAt > 300000) {
@@ -81,7 +80,7 @@ function PendingMusicPoller() {
     poll();
     const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
-  }, [addToast]);
+  }, [addToast, showMusicBanner]);
 
   return null;
 }
@@ -96,29 +95,31 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/create" element={<CreateStoryPage />} />
-          <Route path="/story/:id" element={<StoryDetailPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/my-space" element={<MySpacePage />} />
-          <Route path="/payment" element={<PaymentPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/admin" element={<AdminGuard><Suspense fallback={<AdminFallback />}><AdminLayout /></Suspense></AdminGuard>}>
-            <Route index element={<Suspense fallback={<AdminFallback />}><Dashboard /></Suspense>} />
-            <Route path="stories" element={<Suspense fallback={<AdminFallback />}><AdminStoriesPage /></Suspense>} />
-            <Route path="comments" element={<Suspense fallback={<AdminFallback />}><AdminCommentsPage /></Suspense>} />
-            <Route path="users" element={<Suspense fallback={<AdminFallback />}><AdminUsersPage /></Suspense>} />
-            <Route path="products" element={<Suspense fallback={<AdminFallback />}><AdminProductsPage /></Suspense>} />
-            <Route path="orders" element={<Suspense fallback={<AdminFallback />}><AdminOrdersPage /></Suspense>} />
-          </Route>
-        </Routes>
-        <PendingMusicPoller />
-        <ToastContainer />
-      </Layout>
+      <MusicBannerProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/create" element={<CreateStoryPage />} />
+            <Route path="/story/:id" element={<StoryDetailPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/my-space" element={<MySpacePage />} />
+            <Route path="/payment" element={<PaymentPage />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/admin" element={<AdminGuard><Suspense fallback={<AdminFallback />}><AdminLayout /></Suspense></AdminGuard>}>
+              <Route index element={<Suspense fallback={<AdminFallback />}><Dashboard /></Suspense>} />
+              <Route path="stories" element={<Suspense fallback={<AdminFallback />}><AdminStoriesPage /></Suspense>} />
+              <Route path="comments" element={<Suspense fallback={<AdminFallback />}><AdminCommentsPage /></Suspense>} />
+              <Route path="users" element={<Suspense fallback={<AdminFallback />}><AdminUsersPage /></Suspense>} />
+              <Route path="products" element={<Suspense fallback={<AdminFallback />}><AdminProductsPage /></Suspense>} />
+              <Route path="orders" element={<Suspense fallback={<AdminFallback />}><AdminOrdersPage /></Suspense>} />
+            </Route>
+          </Routes>
+          <PendingMusicPoller />
+          <ToastContainer />
+        </Layout>
+      </MusicBannerProvider>
     </BrowserRouter>
   );
 }

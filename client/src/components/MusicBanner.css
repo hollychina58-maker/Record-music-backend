@@ -1,0 +1,202 @@
+/* MusicBanner — top-center floating banner for music completion */
+
+.music-banner {
+  position: fixed;
+  top: calc(var(--nav-height, 52px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: calc(var(--z-toast, 50) + 10);
+  width: min(480px, calc(100vw - 32px));
+  pointer-events: auto;
+  animation: bannerDrop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.music-banner--exit {
+  animation: bannerRise 0.42s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes bannerDrop {
+  from { opacity: 0; transform: translateX(-50%) translateY(-28px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1); }
+}
+
+@keyframes bannerRise {
+  from { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1); }
+  to   { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(0.96); }
+}
+
+.music-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(22, 18, 14, 0.92);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+/* Vinyl disc animation */
+.music-banner-vinyl {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  position: relative;
+}
+
+.vinyl-disc {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, #1a1210 32%, #2a2018 33%, #1a1210 46%,
+      transparent 47%, transparent 56%, #1a1210 57%, #2a2018 60%,
+      #1a1210 72%, transparent 73%);
+  background-color: #1a1210;
+  box-shadow: 0 0 0 1px rgba(201, 169, 110, 0.25);
+  animation: vinylSpin 3s linear infinite;
+  position: relative;
+}
+
+.vinyl-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #c9a96e 30%, #8b6a2e 100%);
+  transform: translate(-50%, -50%);
+}
+
+@keyframes vinylSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Text */
+.music-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.music-banner-title {
+  font-family: var(--font-ink, serif);
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.95);
+  margin: 0 0 2px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-banner-sub {
+  font-family: var(--font-ui, system-ui, sans-serif);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Action button */
+.music-banner-action {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 16px;
+  background: linear-gradient(135deg, #c9a96e, #a07840);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-family: var(--font-ui, system-ui, sans-serif);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.2s ease, transform 0.15s ease;
+  letter-spacing: 0.02em;
+}
+
+.music-banner-action:hover {
+  opacity: 0.88;
+  transform: scale(1.03);
+}
+
+.music-banner-action:active {
+  transform: scale(0.98);
+}
+
+/* Close button */
+.music-banner-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s;
+}
+
+.music-banner-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* Progress bar */
+.music-banner-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #c9a96e, #a07840);
+  animation: bannerProgress linear forwards;
+  transform-origin: left center;
+  border-radius: 0 0 16px 16px;
+}
+
+@keyframes bannerProgress {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .music-banner {
+    top: calc(var(--nav-height, 52px) + 8px);
+    width: calc(100vw - 24px);
+  }
+
+  .music-banner-inner {
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .music-banner-sub {
+    display: none;
+  }
+
+  .music-banner-vinyl {
+    width: 34px;
+    height: 34px;
+  }
+
+  .vinyl-disc {
+    width: 34px;
+    height: 34px;
+  }
+}

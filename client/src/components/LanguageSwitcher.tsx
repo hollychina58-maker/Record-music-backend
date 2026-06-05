@@ -4,6 +4,8 @@ import './LanguageSwitcher.css';
 const LANGUAGES = [
   { code: 'zh', label: '中文' },
   { code: 'en', label: 'English' },
+  { code: 'ja', label: '日本語' },
+  { code: 'ko', label: '한국어' },
   { code: 'fr', label: 'Français' },
   { code: 'de', label: 'Deutsch' },
   { code: 'ru', label: 'Русский' },
