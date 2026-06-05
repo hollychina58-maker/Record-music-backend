@@ -123,9 +123,16 @@ router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
       console.log('[CreateOrder] Subscription check:', { userId, hasActiveSub: !!activeSub, activeSubPlanType: activeSub?.plan_type || null });
 
       if (activeSub) {
-        // Monthly → Yearly upgrade: discount by the monthly price
+        // Monthly → Yearly upgrade: discount by the price the user actually paid for monthly
+        // Use the order amount actually charged, not the current product price (which may have changed)
         if (product.type === 'yearly' && activeSub.plan_type === 'monthly') {
-          totalCents = Math.max(0, totalCents - activeSub.price_cents);
+          const lastMonthlyOrder = db.prepare(
+            "SELECT total_cents, amount FROM orders WHERE user_id = ? AND plan_type IN ('monthly', 'monthly:upgrade') AND status = 'completed' ORDER BY created_at DESC LIMIT 1"
+          ).get(userId) as { total_cents: number | null; amount: number } | undefined;
+          const paidMonthly = lastMonthlyOrder
+            ? (lastMonthlyOrder.total_cents ?? Math.round(lastMonthlyOrder.amount * 100))
+            : activeSub.price_cents;
+          totalCents = Math.max(0, totalCents - paidMonthly);
           isUpgrade = true;
           console.log('[CreateOrder] Upgrade detected:', { userId, fromPlan: activeSub.plan_type, toPlan: product.type, originalCents: product.price_cents, discountCents: activeSub.price_cents, finalCents: totalCents });
         } else {
@@ -158,14 +165,15 @@ router.post('/orders', authMiddleware, (req: AuthRequest, res: Response) => {
     }
 
     const planType = isUpgrade ? `${product.type}:upgrade` : product.type;
+    const purchasedQuantity = product.type === 'per_use' ? Math.max(1, parseInt(String(quantity), 10) || 1) : 1;
 
     // Wrap in transaction so the order record is atomic
     let newOrderId!: number;
     db.transaction(() => {
       const result = db.prepare(`
-        INSERT INTO orders (user_id, plan_type, amount, currency, total_cents, payment_provider, status, coupon_code)
-        VALUES (?, ?, ?, 'CNY', ?, ?, 'pending', ?)
-      `).run(userId, planType, totalCents / 100, totalCents, provider, appliedCouponCode);
+        INSERT INTO orders (user_id, plan_type, amount, currency, total_cents, payment_provider, status, coupon_code, metadata)
+        VALUES (?, ?, ?, 'CNY', ?, ?, 'pending', ?, ?)
+      `).run(userId, planType, totalCents / 100, totalCents, provider, appliedCouponCode, JSON.stringify({ quantity: purchasedQuantity }));
       newOrderId = Number(result.lastInsertRowid);
     })();
 
@@ -263,10 +271,11 @@ router.post('/orders/:id/verify', authMiddleware, async (req: AuthRequest, res: 
         if (product) {
           if (product.type === 'per_use') {
             const limit = product.music_limit || 1;
-            const unitPrice = product.price_cents || 1;
-            const quantity = Math.max(1, Math.round((order.total_cents ?? (order.amount * 100)) / unitPrice));
+            // Use quantity stored at order creation time — not price arithmetic (breaks with coupons)
+            const meta = (() => { try { return JSON.parse((order as any).metadata || '{}'); } catch { return {}; } })();
+            const qty = Math.max(1, parseInt(String(meta.quantity ?? 1), 10));
             db.prepare('UPDATE users SET free_music_count = free_music_count + ? WHERE id = ?')
-              .run(limit * quantity, order.user_id);
+              .run(limit * qty, order.user_id);
           } else {
             const days = product.type === 'yearly' ? 365 : 30;
             const existing = db.prepare('SELECT id FROM subscriptions WHERE user_id = ?').get(order.user_id) as any;
@@ -352,10 +361,8 @@ router.post('/alipay/notify', express.raw({ type: 'application/x-www-form-urlenc
       timeout: 15000,
     });
 
-    // Parse raw URL-encoded body
-    const params = Object.fromEntries(
-      rawBody.split('&').map((p) => p.split('=').map(decodeURIComponent))
-    ) as Record<string, string>;
+    // Parse raw URL-encoded body — URLSearchParams handles = in base64 values correctly
+    const params = Object.fromEntries(new URLSearchParams(rawBody)) as Record<string, string>;
 
     // Try V2 signature first, fall back to V2 raw
     const signOk = alipay.checkNotifySignV2(params) || alipay.checkNotifySign(rawBody, true);
@@ -401,10 +408,10 @@ router.post('/alipay/notify', express.raw({ type: 'application/x-www-form-urlenc
       if (product) {
         if (product.type === 'per_use') {
           const limit = product.music_limit || 1;
-          const unitPrice = product.price_cents || 1;
-          const quantity = Math.max(1, Math.round((order.total_cents ?? (order.amount * 100)) / unitPrice));
+          const meta = (() => { try { return JSON.parse((order as any).metadata || '{}'); } catch { return {}; } })();
+          const qty = Math.max(1, parseInt(String(meta.quantity ?? 1), 10));
           db.prepare('UPDATE users SET free_music_count = free_music_count + ? WHERE id = ?')
-            .run(limit * quantity, order.user_id);
+            .run(limit * qty, order.user_id);
         } else {
           const days = product.type === 'yearly' ? 365 : 30;
           const existing = db.prepare('SELECT id FROM subscriptions WHERE user_id = ?').get(order.user_id) as any;

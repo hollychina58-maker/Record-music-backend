@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
+import { useAuthStore } from '../stores/authStore';
 import { useLanguage } from '../i18n/LanguageContext';
 import './MusicPlayer.css';
 
@@ -19,32 +20,19 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
   const [duration, setDuration] = useState(0);
 
   useEffect(() => {
-    const audio = new Audio(audioUrl);
-    audio.crossOrigin = 'anonymous';
+    const token = useAuthStore.getState().token;
+    const urlWithToken = token
+      ? `${audioUrl}${audioUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+      : audioUrl;
+    const audio = new Audio(urlWithToken);
     audioRef.current = audio;
 
-    console.log('[MusicPlayer] Loading audio:', audioUrl);
-
-    const onLoaded = () => {
-      console.log('[MusicPlayer] loadedmetadata fired, duration:', audio.duration);
-      setDuration(audio.duration);
-    };
+    const onLoaded = () => setDuration(audio.duration);
     const onTime = () => setCurrentTime(audio.currentTime);
-    const onEnd = () => {
-      console.log('[MusicPlayer] playback ended');
-      setIsPlaying(false);
-    };
-    const onError = (_e: ErrorEvent) => {
-      console.error('[MusicPlayer] audio error:', {
-        error: audio.error,
-        code: audio.error?.code,
-        message: audio.error?.message,
-        networkState: audio.networkState,
-        readyState: audio.readyState,
-      });
-    };
-    const onCanPlay = () => console.log('[MusicPlayer] canplay fired');
-    const onStalled = () => console.warn('[MusicPlayer] stalled - buffering may have stopped');
+    const onEnd = () => setIsPlaying(false);
+    const onError = () => {};
+    const onCanPlay = () => {};
+    const onStalled = () => {};
 
     audio.addEventListener('loadedmetadata', onLoaded);
     audio.addEventListener('timeupdate', onTime);
@@ -70,10 +58,10 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
 
     if (isPlaying) {
       audio.pause();
+      setIsPlaying(false);
     } else {
-      audio.play().catch(() => {});
+      audio.play().then(() => setIsPlaying(true)).catch(() => {});
     }
-    setIsPlaying(!isPlaying);
   };
 
   const formatTime = (seconds: number): string => {

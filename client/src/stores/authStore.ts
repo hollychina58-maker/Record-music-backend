@@ -119,6 +119,7 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           token: null,
           isAuthenticated: false,
+          isLoading: false,
           error: null,
         });
       },
@@ -136,7 +137,9 @@ export const useAuthStore = create<AuthState>()(
           const data = await res.json();
 
           if (!res.ok) {
-            throw new Error(data.error || 'Failed to fetch user');
+            const err: any = new Error(data.error || 'Failed to fetch user');
+            err.status = res.status;
+            throw err;
           }
 
           set({
@@ -153,15 +156,11 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           });
 
-          console.log('[AuthStore] fetchCurrentUser:', {
-            freeMusicCount: data.data.freeMusicCount,
-            hasActiveSub: data.data.hasActiveSubscription,
-            subRemaining: data.data.subscriptionMusicRemaining,
-          });
         } catch (error: unknown) {
           set({ isLoading: false });
-          const message = error instanceof Error ? error.message : '';
-          if (message.includes('Invalid token') || message.includes('No token')) {
+          // Any 401 response means the token is no longer valid — log out
+          const status = (error as any)?.status ?? (error as any)?.response?.status;
+          if (status === 401 || status === 403) {
             get().logout();
           }
         }

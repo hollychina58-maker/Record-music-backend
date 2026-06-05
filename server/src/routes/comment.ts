@@ -53,8 +53,8 @@ router.post('/stories/:storyId/comments', optionalAuthMiddleware, (req: AuthRequ
   const authorName = user?.nickname || '匿名';
 
   const result = db.prepare(
-    'INSERT INTO comments (story_id, author_name, content) VALUES (?, ?, ?)'
-  ).run(storyId, authorName, content);
+    'INSERT INTO comments (story_id, user_id, author_name, content) VALUES (?, ?, ?, ?)'
+  ).run(storyId, req.userId ?? null, authorName, content);
 
   const comment = db.prepare('SELECT * FROM comments WHERE id = ?').get(result.lastInsertRowid);
 

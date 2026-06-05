@@ -29,9 +29,13 @@ export function authMiddleware(
   try {
     const decoded = jwt.verify(token, secret) as { userId: number };
     const db = getDatabase();
-    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(decoded.userId);
+    const user = db.prepare('SELECT id, banned_until FROM users WHERE id = ?').get(decoded.userId) as { id: number; banned_until: string | null } | undefined;
     if (!user) {
       res.status(401).json({ error: 'User not found' });
+      return;
+    }
+    if (user.banned_until && new Date(user.banned_until) > new Date()) {
+      res.status(403).json({ error: 'Account is banned' });
       return;
     }
     req.userId = decoded.userId;

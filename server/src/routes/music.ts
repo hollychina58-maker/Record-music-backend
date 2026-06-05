@@ -133,15 +133,15 @@ router.post('/generate', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 });
 
-router.get('/by-story/:storyId', (_req: Request, res: Response) => {
+router.get('/by-story/:storyId', authMiddleware, (_req: AuthRequest, res: Response) => {
   const db = getDatabase();
   const musicRecords = db.prepare(
-    'SELECT * FROM music WHERE story_id = ? ORDER BY created_at DESC'
+    'SELECT id, story_id, status, style, created_at FROM music WHERE story_id = ? ORDER BY created_at DESC'
   ).all(_req.params.storyId);
   res.json({ data: musicRecords });
 });
 
-router.get('/status/:id', (req: Request, res: Response) => {
+router.get('/status/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   try {
     const db = getDatabase();
     const music = db.prepare(
@@ -176,6 +176,23 @@ router.get('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
 });
 
 router.get('/:id/stream', async (req: Request, res: Response) => {
+  // Accept token from Authorization header OR ?token= query param (needed for HTML audio elements)
+  const secret = process.env.JWT_SECRET;
+  const authHeader = req.headers.authorization;
+  const queryToken = typeof req.query.token === 'string' ? req.query.token : null;
+  const rawToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : queryToken;
+
+  if (!rawToken || !secret) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  try {
+    jwt.verify(rawToken, secret);
+  } catch {
+    res.status(401).json({ error: 'Invalid token' });
+    return;
+  }
+
   try {
     const db = getDatabase();
     const music = db.prepare(

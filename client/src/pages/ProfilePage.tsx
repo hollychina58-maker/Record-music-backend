@@ -32,7 +32,7 @@ export function ProfilePage() {
     try {
       const usageData = await fetchUsage();
       setUsage(usageData);
-      const userStories = await apiService.getStories();
+      const userStories = await apiService.getMyStories();
       setStories(userStories.slice(0, 5));
     } catch (error) {
       console.error('Failed to load profile data');

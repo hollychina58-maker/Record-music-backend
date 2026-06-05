@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { ToastContainer, useToast } from './components/Toast';
@@ -24,6 +24,14 @@ const AdminProductsPage = lazy(() => import('./pages/admin/AdminProductsPage').t
 
 function AdminFallback() {
   return <div style={{ display:'flex',justifyContent:'center',padding:'80px 0',color:'#bbb',fontFamily:'"Noto Serif SC",serif' }}>加载中...</div>;
+}
+
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role !== 'admin') return <Navigate to="/" replace />;
+  return <>{children}</>;
 }
 
 function PendingMusicPoller() {
@@ -98,7 +106,7 @@ function App() {
           <Route path="/my-space" element={<MySpacePage />} />
           <Route path="/payment" element={<PaymentPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/admin" element={<Suspense fallback={<AdminFallback />}><AdminLayout /></Suspense>}>
+          <Route path="/admin" element={<AdminGuard><Suspense fallback={<AdminFallback />}><AdminLayout /></Suspense></AdminGuard>}>
             <Route index element={<Suspense fallback={<AdminFallback />}><Dashboard /></Suspense>} />
             <Route path="stories" element={<Suspense fallback={<AdminFallback />}><AdminStoriesPage /></Suspense>} />
             <Route path="comments" element={<Suspense fallback={<AdminFallback />}><AdminCommentsPage /></Suspense>} />

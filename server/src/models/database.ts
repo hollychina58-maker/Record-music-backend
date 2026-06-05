@@ -63,12 +63,14 @@ export function initDatabase(): void {
     CREATE TABLE IF NOT EXISTS comments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       story_id INTEGER NOT NULL,
+      user_id INTEGER,
       author_name TEXT NOT NULL,
       content TEXT NOT NULL,
       is_hidden INTEGER DEFAULT 0,
       like_count INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (story_id) REFERENCES stories(id)
+      FOREIGN KEY (story_id) REFERENCES stories(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
     );
 
     CREATE TABLE IF NOT EXISTS burned_stories (
@@ -175,6 +177,7 @@ export function initDatabase(): void {
   addColumnIfMissing('stories', 'country_code', 'TEXT');
   addColumnIfMissing('stories', 'like_count', 'INTEGER DEFAULT 0');
   addColumnIfMissing('comments', 'like_count', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('comments', 'user_id', 'INTEGER');
   addColumnIfMissing('orders', 'total_cents', 'INTEGER');
   addColumnIfMissing('orders', 'payment_provider', 'TEXT');
   addColumnIfMissing('orders', 'payment_id', 'TEXT');

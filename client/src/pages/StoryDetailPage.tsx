@@ -113,8 +113,9 @@ export function StoryDetailPage() {
     setShowBurnConfirm(false);
     try {
       await apiService.burnStory(parseInt(id, 10));
-    } finally {
       navigate('/');
+    } catch {
+      // Stay on page — burn failed (e.g. not owner, network error)
     }
   };
 
@@ -149,7 +150,7 @@ export function StoryDetailPage() {
         </button>
         <div className="header-actions">
           <ShareButton storyId={story.id} disabled={story.isBurned} />
-          {!story.isBurned && (
+          {!story.isBurned && user?.id === story.user_id && (
             <button
               type="button"
               className="burn-btn"

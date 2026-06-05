@@ -49,26 +49,20 @@ export function HomePage() {
   return (
     <div className="home-page">
       <div className="bg-ink">
-        <div className="bg-wash wash-main" />
-        <div className="bg-wash wash-side" />
         <div className="bg-line" />
       </div>
 
       <section className="hero">
-        <div className="hero-visual">
-          <svg className="hero-brush" viewBox="0 0 400 120" preserveAspectRatio="none">
-            <path
-              d="M20 60 Q 100 20 180 55 T 380 50"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="0.8"
-              opacity="0.12"
-            />
-          </svg>
+        <div className="hero-text">
+          <h1 className="hero-heading">
+            <span className="hero-line1">{t('home.hero.line1')}</span>
+            <span className="hero-line2">{t('home.hero.line2')}</span>
+          </h1>
+          <div className="hero-rule" />
+        </div>
+        <div className="hero-aside">
           <span className="hero-seal">墨</span>
         </div>
-        <h1 className="hero-heading">{t('home.hero.line1')}<br />{t('home.hero.line2')}</h1>
-        <div className="hero-rule" />
       </section>
 
       <main className="feed">
@@ -92,67 +86,43 @@ export function HomePage() {
             <Link to="/create" className="empty-link">{t('home.empty.link')}</Link>
           </div>
         ) : (
-          <>
-            {stories.length >= 5 && (
-              <section className="featured-strip">
-                <div className="featured-scroll">
-                  {stories.slice(0, 4).map((story, i) => (
-                    <Link
-                      key={story.id}
-                      to={`/story/${story.id}`}
-                      className="featured-card"
-                      style={{ animationDelay: `${i * 0.1}s` }}
-                    >
-                      <StoryPoster title={story.title} content={story.content} index={i} />
-                      <div className="featured-info">
-                        <h3 className="featured-title">{story.title}</h3>
-                        <p className="featured-excerpt">
-                          {story.content.length > 40 ? story.content.slice(0, 40) + '…' : story.content}
-                        </p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
-            <div className="feed-grid feed-grid--bento">
-              {stories.map((story, i) => {
-                const cardClass = `story-card${i === 0 ? ' story-card--hero' : ''}`;
-                return (
-                  <Link
-                    key={story.id}
-                    to={`/story/${story.id}`}
-                    className={cardClass}
-                    style={{ animationDelay: `${0.1 + i * 0.06}s` }}
-                  >
-                    <StoryPoster title={story.title} content={story.content} index={i} />
-                    <div className="card-info">
-                      <h2 className="card-title">{story.title}</h2>
-                      <p className="card-excerpt">
-                        {story.content.length > 80 ? story.content.slice(0, 80) + '…' : story.content}
-                      </p>
-                      <div className="card-meta">
-                        <time className="card-date">
-                          {new Date(story.created_at).toLocaleDateString('zh-CN', {
-                            year: 'numeric', month: 'long', day: 'numeric',
-                          })}
-                        </time>
-                        <div className="card-stats">
-                          {story.like_count !== undefined && story.like_count > 0 && (
-                            <span className="card-likes">{story.like_count} {t('home.card.likes')}</span>
-                          )}
-                          {story.comment_count !== undefined && story.comment_count > 0 && (
-                            <span className="card-comments">{story.comment_count} {t('home.card.comments')}</span>
-                          )}
-                          <span className="card-read">&rarr; {t('home.card.read')}</span>
-                        </div>
+          <div className="feed-grid feed-grid--bento">
+            {stories.map((story, i) => {
+              const cardClass = `story-card${i === 0 ? ' story-card--hero' : ''}`;
+              return (
+                <Link
+                  key={story.id}
+                  to={`/story/${story.id}`}
+                  className={cardClass}
+                  style={{ animationDelay: `${0.1 + i * 0.06}s` }}
+                >
+                  <StoryPoster title={story.title} content={story.content} index={i} />
+                  <div className="card-info">
+                    <h2 className="card-title">{story.title}</h2>
+                    <p className="card-excerpt">
+                      {story.content.length > 80 ? story.content.slice(0, 80) + '…' : story.content}
+                    </p>
+                    <div className="card-meta">
+                      <time className="card-date">
+                        {new Date(story.created_at).toLocaleDateString('zh-CN', {
+                          year: 'numeric', month: 'long', day: 'numeric',
+                        })}
+                      </time>
+                      <div className="card-stats">
+                        {story.like_count !== undefined && story.like_count > 0 && (
+                          <span className="card-likes">{story.like_count} {t('home.card.likes')}</span>
+                        )}
+                        {story.comment_count !== undefined && story.comment_count > 0 && (
+                          <span className="card-comments">{story.comment_count} {t('home.card.comments')}</span>
+                        )}
+                        <span className="card-read">&rarr; {t('home.card.read')}</span>
                       </div>
                     </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         )}
       </main>
 

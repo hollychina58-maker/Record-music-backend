@@ -176,20 +176,8 @@ export function CheckoutPage() {
     setError('');
 
     try {
-      const orderRes = await apiService.clientPost('/payments/orders', {
-        productId: product.id,
-        quantity,
-        provider,
-        couponCode: couponCode.trim() || undefined,
-      });
-      if (!orderRes?.data?.orderId) {
-        setError(t('checkout.createOrderFail'));
-        return;
-      }
-      setOrderId(orderRes.data.orderId);
+      // Only advance to step 2 — order is created later once provider is chosen
       setStep('payment');
-    } catch (err: any) {
-      setError(err?.response?.data?.error || t('checkout.createOrderFail'));
     } finally {
       setProcessing(false);
       creatingRef.current = false;
@@ -197,7 +185,6 @@ export function CheckoutPage() {
   };
 
   const handlePay = async () => {
-    if (!orderId) return;
     if (!product) return;
     if (payingRef.current) return;
     payingRef.current = true;
@@ -207,7 +194,24 @@ export function CheckoutPage() {
     setError('');
 
     try {
-      const payRes = await apiService.clientPost('/payments/orders/' + orderId + '/pay');
+      // Create the order now — with the provider the user actually selected
+      let activeOrderId = orderId;
+      if (!activeOrderId) {
+        const orderRes = await apiService.clientPost('/payments/orders', {
+          productId: product.id,
+          quantity,
+          provider,
+          couponCode: couponCode.trim() || undefined,
+        });
+        if (!orderRes?.data?.orderId) {
+          setError(t('checkout.createOrderFail'));
+          return;
+        }
+        activeOrderId = orderRes.data.orderId;
+        setOrderId(activeOrderId);
+      }
+
+      const payRes = await apiService.clientPost('/payments/orders/' + activeOrderId + '/pay');
 
       if (payRes.data.redirectUrl) {
         window.location.href = payRes.data.redirectUrl;
@@ -238,7 +242,7 @@ export function CheckoutPage() {
             return;
           }
           try {
-            const verifyRes = await apiService.clientPost('/payments/orders/' + orderId + '/verify');
+            const verifyRes = await apiService.clientPost('/payments/orders/' + activeOrderId + '/verify');
             if (verifyRes.success) {
               pollRef.current = null;
               setPolling(false);

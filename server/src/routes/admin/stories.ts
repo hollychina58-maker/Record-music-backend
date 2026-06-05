@@ -22,13 +22,13 @@ router.get('/stories', authMiddleware, adminMiddleware, (req: AuthRequest, res: 
     ? `SELECT s.id, s.title, s.user_id, s.language, s.like_count, s.created_at,
        u.nickname, u.email,
        (SELECT COUNT(*) FROM comments WHERE story_id = s.id) as comment_count
-       FROM stories s JOIN users u ON s.user_id = u.id
+       FROM stories s LEFT JOIN users u ON s.user_id = u.id
        WHERE s.title LIKE ? OR s.content LIKE ?
        ORDER BY s.created_at DESC LIMIT ? OFFSET ?`
     : `SELECT s.id, s.title, s.user_id, s.language, s.like_count, s.created_at,
        u.nickname, u.email,
        (SELECT COUNT(*) FROM comments WHERE story_id = s.id) as comment_count
-       FROM stories s JOIN users u ON s.user_id = u.id
+       FROM stories s LEFT JOIN users u ON s.user_id = u.id
        ORDER BY s.created_at DESC LIMIT ? OFFSET ?`;
   const dataParams = q ? [`%${q}%`, `%${q}%`, limit, offset] : [limit, offset];
   const stories = db.prepare(dataSql).all(...dataParams);
