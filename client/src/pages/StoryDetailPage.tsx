@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { apiService, Story } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useToast } from '../components/Toast';
 import { CommentSection } from '../components/CommentSection';
 import { ShareButton } from '../components/ShareButton';
 import { BurnConfirmModal } from '../components/BurnConfirmModal';
@@ -23,6 +24,7 @@ export function StoryDetailPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
   const { t } = useLanguage();
+  const { addToast } = useToast();
   const [story, setStory] = useState<Story | null>(null);
   const [loading, setLoading] = useState(true);
   const [showBurnConfirm, setShowBurnConfirm] = useState(false);
@@ -41,19 +43,16 @@ export function StoryDetailPage() {
           if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
           setMusic({ id: musicId, status: 'completed', file_path: result.filePath, style: null });
           useAuthStore.getState().fetchCurrentUser();
+          addToast('success', '🎵 专属配乐已生成，向下滚动即可收听！', { duration: 6000 });
         } else if (result.status === 'failed') {
           if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
           setMusic(null);
+          addToast('error', '配乐生成失败，请重新尝试');
         }
       } catch {
         // Keep polling on network errors
       }
     }, 4000);
-
-    // Cleanup polling on unmount
-    return () => {
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    };
   };
 
   useEffect(() => {

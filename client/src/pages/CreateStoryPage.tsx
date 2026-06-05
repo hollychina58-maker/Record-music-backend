@@ -79,12 +79,14 @@ export function CreateStoryPage() {
       if (withMusic && user) {
         try {
           const { musicId } = await apiService.generateMusic(story.id, story.content, { musicType, musicMood, musicGenre });
-          // Track pending music in localStorage so App-level poller can pick it up
+          // Register in localStorage so App-level PendingMusicPoller tracks it
           const pending = JSON.parse(localStorage.getItem('mo_pending_music') || '[]');
           pending.push({ musicId, storyId: story.id, createdAt: Date.now() });
           localStorage.setItem('mo_pending_music', JSON.stringify(pending));
-          addToast('loading', t('create.generating'));
-          navigate('/');
+          // Show persistent loading toast — the poller in App.tsx will fire a
+          // success toast with a "去听听" link when generation completes.
+          addToast('loading', '🎵 正在为你的故事生成专属配乐，稍后会通知你…');
+          navigate(`/story/${story.id}`);
         } catch (err: any) {
           if (err?.response?.status === 402) {
             setError(t('create.error.noCredits'));

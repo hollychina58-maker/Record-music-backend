@@ -16,46 +16,73 @@ const DEFAULT_STORY = {
   country_code: 'CN',
 };
 
+const MUSIC_OPTIONS = {
+  musicType: 'instrumental' as const,
+  musicMood: 'peace' as const,
+  musicGenre: 'chinese_folk' as const,
+};
+
 export async function seedDefaultStory(): Promise<void> {
-  const existing = await dbGet('SELECT id FROM stories WHERE user_id IS NULL LIMIT 1');
-  if (existing) {
-    console.log('[Seed] Default story already exists');
+  if (!process.env.MINIMAX_API_KEY) {
+    console.log('[Seed] MiniMax API key not configured — skipping seed');
     return;
   }
 
-  const storyResult = await dbRun(
-    'INSERT INTO stories (user_id, title, content, language, country_code) VALUES (NULL, ?, ?, ?, ?)',
-    [DEFAULT_STORY.title, DEFAULT_STORY.content, DEFAULT_STORY.language, DEFAULT_STORY.country_code]
-  );
-  const storyId = storyResult.lastInsertRowid;
+  // Check if default story already exists
+  const existing = await dbGet<{ id: number }>('SELECT id FROM stories WHERE user_id IS NULL LIMIT 1');
 
-  const musicResult = await dbRun(
-    "INSERT INTO music (story_id, status, style) VALUES (?, 'pending', '辽阔悠扬')",
+  let storyId: number;
+  if (existing) {
+    storyId = existing.id;
+    console.log(`[Seed] Default story already exists (id: ${storyId})`);
+  } else {
+    const storyResult = await dbRun(
+      'INSERT INTO stories (user_id, title, content, language, country_code) VALUES (NULL, ?, ?, ?, ?)',
+      [DEFAULT_STORY.title, DEFAULT_STORY.content, DEFAULT_STORY.language, DEFAULT_STORY.country_code]
+    );
+    storyId = storyResult.lastInsertRowid;
+    console.log(`[Seed] Default story created (id: ${storyId})`);
+  }
+
+  // Check music status for this story
+  const existingMusic = await dbGet<{ id: number; status: string; file_path: string | null }>(
+    'SELECT id, status, file_path FROM music WHERE story_id = ? ORDER BY id ASC LIMIT 1',
     [storyId]
   );
-  const musicId = musicResult.lastInsertRowid;
 
-  console.log(`[Seed] Default story created (id: ${storyId}), music record (id: ${musicId})`);
-
-  if (!process.env.MINIMAX_API_KEY) {
-    console.log('[Seed] MiniMax API key not configured — skipping music generation');
+  if (existingMusic?.status === 'completed' && existingMusic.file_path) {
+    // Music already generated and stored — nothing to do
+    console.log(`[Seed] Music already complete (id: ${existingMusic.id})`);
     return;
+  }
+
+  let musicId: number;
+  if (existingMusic) {
+    // Music record exists but is pending or failed — retry generation in place
+    musicId = existingMusic.id;
+    await dbRun("UPDATE music SET status = 'pending', file_path = NULL WHERE id = ?", [musicId]);
+    console.log(`[Seed] Retrying music generation (id: ${musicId}, was: ${existingMusic.status})`);
+  } else {
+    // Create a new music record
+    const musicResult = await dbRun(
+      "INSERT INTO music (story_id, status, style) VALUES (?, 'pending', '辽阔悠扬')",
+      [storyId]
+    );
+    musicId = musicResult.lastInsertRowid;
+    console.log(`[Seed] Music record created (id: ${musicId})`);
   }
 
   try {
     console.log('[Seed] Generating music for default story...');
-    const { audioUrl } = await generateMusic(DEFAULT_STORY.content, {
-      musicType: 'instrumental',
-      musicMood: 'peace',
-      musicGenre: 'chinese_folk',
-    });
+    const { audioUrl } = await generateMusic(DEFAULT_STORY.content, MUSIC_OPTIONS);
     await dbRun(
       "UPDATE music SET status = 'completed', file_path = ? WHERE id = ?",
       [audioUrl, musicId]
     );
-    console.log('[Seed] Music generated and saved');
+    console.log('[Seed] Default story music generated and saved:', audioUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.warn(`[Seed] Music generation failed: ${message} — music will remain pending`);
+    await dbRun("UPDATE music SET status = 'failed' WHERE id = ?", [musicId]);
   }
 }
