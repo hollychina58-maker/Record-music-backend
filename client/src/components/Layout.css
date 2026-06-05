@@ -19,9 +19,9 @@
 }
 
 .global-nav-inner {
-  max-width: var(--content-max-editorial);
+  max-width: var(--content-max);
   margin: 0 auto;
-  padding: 0 clamp(16px, 5%, 64px);
+  padding: 0 var(--space-6);
   height: var(--nav-height);
   display: flex;
   align-items: center;

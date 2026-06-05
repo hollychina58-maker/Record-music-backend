@@ -1,22 +1,32 @@
-/* MusicPlayer — Ink Editorial */
+/* MusicPlayer v2.0 - Waveform + Glow Effects */
+/* 波形可视化 + 播放发光效果 */
 
 .ink-player {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-6);
-  background: var(--color-page);
-  border-top: 1.5px solid var(--ink-medium);
-  border-bottom: 1px solid var(--ink-faint);
+  background: var(--paper-mist);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(26, 26, 26, 0.08);
+  border-radius: var(--radius-xl);
   min-width: 300px;
-  transition: border-top-color 0.25s;
+  box-shadow: var(--shadow-mist);
+  transition: all var(--transition-normal) var(--ease-out-expo);
 }
 
+/* Play state glow */
 .ink-player--playing {
-  border-top-color: var(--ink-deep);
+  box-shadow:
+    var(--shadow-mist),
+    0 0 40px rgba(26, 26, 26, 0.1);
+  border-color: rgba(26, 26, 26, 0.12);
 }
 
-/* ===== INFO ===== */
+/* ============================================
+   INFO SECTION
+   ============================================ */
 
 .ink-player__info {
   display: flex;
@@ -26,29 +36,30 @@
 }
 
 .ink-player__title {
-  font-family: var(--font-ink);
   font-size: var(--text-base);
-  font-weight: 400;
+  font-weight: var(--font-weight-bold);
   color: var(--ink-deep);
   letter-spacing: 0.08em;
   animation: fadeInUp 0.5s var(--ease-out-expo);
 }
 
 .ink-player__title--empty {
-  color: var(--ink-faint);
+  color: var(--ink-light);
   font-style: italic;
+  font-weight: var(--font-weight-normal);
 }
 
 .ink-player__artist {
-  font-family: var(--font-ui);
-  font-size: var(--text-xs);
-  color: var(--ink-wash);
-  letter-spacing: 0.06em;
+  font-size: var(--text-sm);
+  color: var(--ink-medium);
+  letter-spacing: 0.05em;
   animation: fadeInUp 0.5s var(--ease-out-expo) 0.1s forwards;
   opacity: 0;
 }
 
-/* ===== WAVEFORM ===== */
+/* ============================================
+   WAVEFORM VISUALIZATION
+   ============================================ */
 
 .ink-player__waveform {
   display: flex;
@@ -60,9 +71,14 @@
 }
 
 .waveform-bar {
-  width: 2px;
+  width: 3px;
   height: 20%;
-  background: var(--ink-light);
+  background: linear-gradient(
+    to top,
+    var(--ink-light),
+    var(--ink-medium)
+  );
+  border-radius: 2px;
   transition: height 0.1s ease;
 }
 
@@ -70,15 +86,15 @@
   animation: waveform 0.8s ease-in-out infinite;
 }
 
-.waveform-bar:nth-child(1)  { animation-delay: 0s; }
-.waveform-bar:nth-child(2)  { animation-delay: 0.1s; }
-.waveform-bar:nth-child(3)  { animation-delay: 0.2s; }
-.waveform-bar:nth-child(4)  { animation-delay: 0.3s; }
-.waveform-bar:nth-child(5)  { animation-delay: 0.4s; }
-.waveform-bar:nth-child(6)  { animation-delay: 0.5s; }
-.waveform-bar:nth-child(7)  { animation-delay: 0.6s; }
-.waveform-bar:nth-child(8)  { animation-delay: 0.7s; }
-.waveform-bar:nth-child(9)  { animation-delay: 0.6s; }
+.waveform-bar:nth-child(1) { animation-delay: 0s; }
+.waveform-bar:nth-child(2) { animation-delay: 0.1s; }
+.waveform-bar:nth-child(3) { animation-delay: 0.2s; }
+.waveform-bar:nth-child(4) { animation-delay: 0.3s; }
+.waveform-bar:nth-child(5) { animation-delay: 0.4s; }
+.waveform-bar:nth-child(6) { animation-delay: 0.5s; }
+.waveform-bar:nth-child(7) { animation-delay: 0.6s; }
+.waveform-bar:nth-child(8) { animation-delay: 0.7s; }
+.waveform-bar:nth-child(9) { animation-delay: 0.6s; }
 .waveform-bar:nth-child(10) { animation-delay: 0.5s; }
 .waveform-bar:nth-child(11) { animation-delay: 0.4s; }
 .waveform-bar:nth-child(12) { animation-delay: 0.3s; }
@@ -87,16 +103,23 @@
 .waveform-bar:nth-child(15) { animation-delay: 0s; }
 
 @keyframes waveform {
-  0%, 100% { height: 20%; }
-  50%       { height: 100%; }
+  0%, 100% {
+    height: 20%;
+  }
+  50% {
+    height: 100%;
+  }
 }
 
+/* Paused state - bars at minimum */
 .ink-player:not(.ink-player--playing) .waveform-bar {
   height: 20% !important;
   animation: none;
 }
 
-/* ===== CONTROLS ===== */
+/* ============================================
+   CONTROLS
+   ============================================ */
 
 .ink-player__controls {
   display: flex;
@@ -113,38 +136,79 @@
   border: none;
   cursor: pointer;
   color: var(--ink-medium);
-  padding: var(--space-2);
-  transition: color 0.2s;
+  font-size: var(--text-sm);
+  padding: var(--space-3);
+  border-radius: 50%;
+  transition: all var(--transition-fast) var(--ease-out-expo);
+  position: relative;
 }
 
-.ink-player__btn:hover  { color: var(--ink-deep); }
-.ink-player__btn:active { transform: scale(0.92); }
+.ink-player__btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--ink-deep);
+  transform: scale(0);
+  opacity: 0;
+  transition: all var(--transition-normal) var(--ease-out-expo);
+}
+
+.ink-player__btn:hover::before {
+  transform: scale(1);
+  opacity: 0.08;
+}
+
+.ink-player__btn:hover {
+  color: var(--ink-deep);
+}
+
+.ink-player__btn:active {
+  transform: scale(0.9);
+}
 
 .ink-player__btn svg {
   width: 18px;
   height: 18px;
+  position: relative;
+  z-index: 1;
 }
 
-.ink-player__btn--download { color: var(--ink-faint); }
-.ink-player__btn--download:hover { color: var(--ink-medium); }
+/* Download button */
+.ink-player__btn--download {
+  color: var(--ink-light);
+}
 
-/* Play/Pause Button */
+.ink-player__btn--download:hover {
+  color: var(--ink-deep);
+}
+
+/* Play/Pause Button - Special */
 .ink-player__btn--play {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   border: 1px solid var(--ink-medium);
   color: var(--ink-deep);
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
 
-.ink-player__btn--play:hover {
-  border-color: var(--ink-deep);
+.ink-player__btn--play::before {
+  background: var(--ink-deep);
+  opacity: 0;
+}
+
+.ink-player__btn--play:hover::before {
+  opacity: 0.1;
 }
 
 .ink-player--playing .ink-player__btn--play {
   border-color: var(--ink-deep);
   background: var(--ink-deep);
-  color: var(--paper-cream);
+  color: var(--paper-white);
+  box-shadow: 0 0 20px rgba(26, 26, 26, 0.3);
+}
+
+.ink-player--playing .ink-player__btn--play:hover {
+  box-shadow: 0 0 30px rgba(26, 26, 26, 0.4);
 }
 
 .ink-player__btn--play svg {
@@ -152,12 +216,43 @@
   height: 20px;
 }
 
+/* Glow effect when playing */
+.ink-player__btn--play::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--ember-orange);
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all var(--transition-normal) var(--ease-out-expo);
+}
+
+.ink-player--playing .ink-player__btn--play::after {
+  opacity: 0.5;
+  animation: playGlow 2s ease-in-out infinite;
+}
+
+@keyframes playGlow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+/* Skip buttons */
 .ink-player__btn--skip {
   font-size: 10px;
   letter-spacing: -2px;
 }
 
-/* ===== PROGRESS ===== */
+/* ============================================
+   PROGRESS BAR
+   ============================================ */
 
 .ink-player__progress {
   display: flex;
@@ -166,36 +261,74 @@
 }
 
 .ink-player__time {
-  font-family: var(--font-ui);
   font-size: var(--text-xs);
-  color: var(--ink-wash);
+  color: var(--ink-light);
   min-width: 40px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
 
-.ink-player__time:first-child { text-align: right; }
+.ink-player__time:first-child {
+  text-align: right;
+}
 
 .ink-player__track {
   flex: 1;
-  height: 1px;
-  background: var(--ink-faint);
+  height: 3px;
+  background: rgba(26, 26, 26, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
   position: relative;
-  cursor: pointer;
+}
+
+.ink-player__track::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 4px,
+    rgba(26, 26, 26, 0.03) 4px,
+    rgba(26, 26, 26, 0.03) 5px
+  );
 }
 
 .ink-player__fill {
   height: 100%;
-  background: var(--ink-medium);
+  background: linear-gradient(
+    90deg,
+    var(--ink-medium),
+    var(--ink-deep)
+  );
+  border-radius: 2px;
   transition: width 0.1s linear;
   position: relative;
 }
 
-.ink-player--playing .ink-player__fill {
+/* Progress glow */
+.ink-player--playing .ink-player__fill::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 8px;
+  height: 8px;
   background: var(--ink-deep);
+  border-radius: 50%;
+  transform: translateY(-50%);
+  box-shadow: 0 0 10px rgba(26, 26, 26, 0.3);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
 }
 
-/* ===== VOLUME ===== */
+.ink-player--playing .ink-player__fill::after {
+  opacity: 1;
+}
+
+/* ============================================
+   VOLUME CONTROL (Optional)
+   ============================================ */
 
 .ink-player__volume {
   display: flex;
@@ -210,41 +343,65 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: var(--ink-faint);
+  color: var(--ink-light);
   padding: var(--space-1);
-  transition: color 0.2s;
+  transition: color var(--transition-fast);
 }
 
-.ink-player__volume-btn:hover { color: var(--ink-medium); }
+.ink-player__volume-btn:hover {
+  color: var(--ink-medium);
+}
 
 .ink-player__volume-slider {
   width: 60px;
-  height: 1px;
-  background: var(--ink-faint);
+  height: 2px;
+  background: rgba(26, 26, 26, 0.1);
+  border-radius: 1px;
   appearance: none;
   cursor: pointer;
 }
 
 .ink-player__volume-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   background: var(--ink-medium);
+  border-radius: 50%;
   cursor: pointer;
+  transition: transform var(--transition-fast);
 }
 
-/* ===== ANIMATIONS ===== */
+.ink-player__volume-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(5px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
+/* Track change animation */
 .ink-player__title--changing {
   animation: titleChange 0.5s var(--ease-out-expo);
 }
 
 @keyframes titleChange {
-  0%   { opacity: 0; transform: translateY(-10px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
