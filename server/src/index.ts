@@ -19,6 +19,7 @@ import adminCommentRoutes from './routes/admin/comments.js';
 import adminUserRoutes from './routes/admin/users.js';
 import adminProductRoutes from './routes/admin/products.js';
 import adminCouponRoutes from './routes/admin/coupons.js';
+import adminOrderRoutes from './routes/admin/orders.js';
 
 dotenv.config();
 
@@ -86,6 +87,7 @@ app.use('/api/admin', adminCommentRoutes);
 app.use('/api/admin', adminUserRoutes);
 app.use('/api/admin', adminProductRoutes);
 app.use('/api/admin', adminCouponRoutes);
+app.use('/api/admin', adminOrderRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

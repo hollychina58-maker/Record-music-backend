@@ -35,6 +35,9 @@ export function AdminLayout() {
           <NavLink to="/admin/products" className={({ isActive }) => isActive ? 'admin-nav-item active' : 'admin-nav-item'}>
             套餐与优惠
           </NavLink>
+          <NavLink to="/admin/orders" className={({ isActive }) => isActive ? 'admin-nav-item active' : 'admin-nav-item'}>
+            订单管理
+          </NavLink>
         </nav>
         <button className="admin-back-btn" onClick={() => navigate('/')}>
           返回前台

@@ -11,6 +11,7 @@ interface StoryRow {
   language: string;
   like_count: number;
   comment_count: number;
+  is_burned: number;
   created_at: string;
 }
 
@@ -35,14 +36,16 @@ export function AdminStoriesPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchStories(page, search);
-  }, [page, search, fetchStories]);
+  useEffect(() => { fetchStories(page, search); }, [page, search, fetchStories]);
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm(`确定要删除故事 #${id} 吗？此操作不可撤销。`)) return;
-    await apiService.clientDelete(`/admin/stories/${id}`);
-    fetchStories(page, search);
+    if (!window.confirm(`确定删除故事 #${id}？此操作不可撤销。`)) return;
+    try {
+      await apiService.clientDelete(`/admin/stories/${id}`);
+      fetchStories(page, search);
+    } catch (err: any) {
+      alert(err?.response?.data?.error || '删除失败');
+    }
   };
 
   const totalPages = Math.ceil(total / limit);
@@ -72,19 +75,35 @@ export function AdminStoriesPage() {
                 <th>语言</th>
                 <th>点赞</th>
                 <th>评论</th>
+                <th>状态</th>
                 <th>创建时间</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {stories.map((s) => (
-                <tr key={s.id}>
+                <tr key={s.id} className={s.is_burned ? 'row-burned' : ''}>
                   <td>{s.id}</td>
-                  <td className="td-title">{s.title}</td>
-                  <td>{s.nickname || s.email}</td>
+                  <td className="td-title">
+                    <a href={`/story/${s.id}`} target="_blank" rel="noopener noreferrer"
+                      style={{ color: 'inherit', textDecoration: 'underline dotted' }}>
+                      {s.title}
+                    </a>
+                  </td>
+                  <td>
+                    <div>{s.nickname || '-'}</div>
+                    <div style={{ fontSize: '0.72rem', color: '#888' }}>{s.email}</div>
+                  </td>
                   <td>{s.language || '-'}</td>
                   <td>{s.like_count}</td>
                   <td>{s.comment_count}</td>
+                  <td>
+                    {s.is_burned ? (
+                      <span className="status-badge status-banned">已焚烧</span>
+                    ) : (
+                      <span className="status-badge status-active">正常</span>
+                    )}
+                  </td>
                   <td>{new Date(s.created_at).toLocaleDateString('zh-CN')}</td>
                   <td>
                     <button className="admin-btn admin-btn-danger" onClick={() => handleDelete(s.id)}>
@@ -94,7 +113,7 @@ export function AdminStoriesPage() {
                 </tr>
               ))}
               {stories.length === 0 && (
-                <tr><td colSpan={8} className="td-empty">暂无数据</td></tr>
+                <tr><td colSpan={9} className="td-empty">暂无数据</td></tr>
               )}
             </tbody>
           </table>
@@ -102,7 +121,7 @@ export function AdminStoriesPage() {
           {totalPages > 1 && (
             <div className="admin-pagination">
               <button disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
-              <span className="page-info">{page} / {totalPages}</span>
+              <span className="page-info">{page} / {totalPages}（共 {total} 条）</span>
               <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>下一页</button>
             </div>
           )}
