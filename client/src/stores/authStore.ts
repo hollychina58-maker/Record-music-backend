@@ -148,6 +148,7 @@ export const useAuthStore = create<AuthState>()(
               email: data.data.email,
               nickname: data.data.nickname,
               avatar: data.data.avatar,
+              role: data.data.role ?? get().user?.role,
               freeMusicCount: data.data.freeMusicCount,
               hasActiveSubscription: data.data.hasActiveSubscription || false,
               subscriptionMusicRemaining: data.data.subscriptionMusicRemaining ?? null,
