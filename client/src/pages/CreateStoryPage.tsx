@@ -11,6 +11,7 @@ export function CreateStoryPage() {
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const fetchCurrentUser = useAuthStore(state => state.fetchCurrentUser);
   const { t } = useLanguage();
 
   const [title, setTitle] = useState('');
@@ -28,6 +29,12 @@ export function CreateStoryPage() {
       navigate('/login', { replace: true });
     }
   }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchCurrentUser();
+    }
+  }, [isAuthenticated, fetchCurrentUser]);
 
   if (!isAuthenticated) {
     return null;
