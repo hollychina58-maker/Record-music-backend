@@ -4,6 +4,7 @@ import axios from 'axios';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { generateMusic, analyzeEmotion, MOOD_LABELS } from '../services/minimax.js';
 import type { MusicOptions } from '../services/minimax.js';
+import { extractLyrics } from '../services/storyAnalysis.js';
 import { dbGet, dbAll, dbRun, dbBatch } from '../models/database.js';
 import path from 'path';
 import fs from 'fs';
@@ -42,7 +43,7 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
     const { storyId, text, musicType, musicMood, musicGenre } = req.body;
     if (!storyId || !text) { res.status(400).json({ error: 'storyId and text are required' }); return; }
 
-    const story = await dbGet('SELECT id FROM stories WHERE id = ?', [storyId]);
+    const story = await dbGet<{ id: number; tone: string | null }>('SELECT id, tone FROM stories WHERE id = ?', [storyId]);
     if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
 
     const userId = req.userId as number;
@@ -78,8 +79,17 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
       }
     }
 
-    const musicOptions: MusicOptions = { musicType, musicMood, musicGenre };
-    const styleLabel = (musicMood && MOOD_LABELS[musicMood]) ? MOOD_LABELS[musicMood] : analyzeEmotion(text).style;
+    // AI tone from story analysis takes priority over client-supplied musicMood
+    const effectiveMood = story.tone || musicMood || undefined;
+    const musicOptions: MusicOptions = { musicType, musicMood: effectiveMood, musicGenre };
+    const styleLabel = (effectiveMood && MOOD_LABELS[effectiveMood]) ? MOOD_LABELS[effectiveMood] : analyzeEmotion(text).style;
+
+    // For song mode, AI-rewrite the story into proper lyrics before sending to MiniMax
+    let effectiveText = text;
+    if (musicType === 'song') {
+      effectiveText = await extractLyrics(text, effectiveMood || 'peace').catch(() => text.slice(0, 200));
+      console.log('[Music] Song mode: AI-extracted lyrics length:', effectiveText.length);
+    }
 
     const musicRecord = await dbRun(
       "INSERT INTO music (story_id, status, style) VALUES (?, 'pending', ?)",
@@ -94,7 +104,7 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
       ? await dbGet<{ free_music_count: number }>('SELECT free_music_count FROM users WHERE id = ?', [userId])
       : null;
 
-    processMusicAsync(userId, storyId, musicId, text, musicOptions, isSubscription, subscriptionId);
+    processMusicAsync(userId, storyId, musicId, effectiveText, musicOptions, isSubscription, subscriptionId);
 
     res.status(202).json({
       data: {

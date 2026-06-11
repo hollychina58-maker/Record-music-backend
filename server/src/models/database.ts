@@ -237,6 +237,8 @@ export async function initDatabase(): Promise<void> {
   await addColumnIfMissing('orders', 'metadata', 'TEXT');
   await addColumnIfMissing('orders', 'updated_at', 'DATETIME');
   await addColumnIfMissing('orders', 'coupon_code', 'TEXT');
+  await addColumnIfMissing('stories', 'tags', 'TEXT');
+  await addColumnIfMissing('stories', 'tone', 'TEXT');
 
   // Seed default products if none exist
   const productCountResult = await client.execute('SELECT COUNT(*) as count FROM products');

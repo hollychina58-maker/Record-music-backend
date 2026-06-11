@@ -3,6 +3,7 @@ import { dbGet, dbAll, dbRun } from '../models/database.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { detectLanguage } from '../services/language.js';
 import { lookupGeo } from '../services/geoip.js';
+import { analyzeStory } from '../services/storyAnalysis.js';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ router.get('/', async (req: Request, res: Response) => {
   if (countryCode) { conditions.push('(s.country_code = ? OR s.country_code IS NULL)'); params.push(countryCode); }
 
   const where = conditions.join(' AND ');
-  let stories = await dbAll(
+  let stories = await dbAll<any>(
     `SELECT s.*, COUNT(c.id) as comment_count
      FROM stories s
      LEFT JOIN burned_stories bs ON s.id = bs.story_id
@@ -32,7 +33,7 @@ router.get('/', async (req: Request, res: Response) => {
   );
 
   if (stories.length === 0 && countryCode) {
-    stories = await dbAll(
+    stories = await dbAll<any>(
       `SELECT s.*, COUNT(c.id) as comment_count
        FROM stories s
        LEFT JOIN burned_stories bs ON s.id = bs.story_id
@@ -44,13 +45,18 @@ router.get('/', async (req: Request, res: Response) => {
     );
   }
 
-  res.json({ data: stories, meta: { page, limit } });
+  const parsed = stories.map((s: any) => ({
+    ...s,
+    tags: s.tags ? (() => { try { return JSON.parse(s.tags); } catch { return []; } })() : null,
+  }));
+  res.json({ data: parsed, meta: { page, limit } });
 });
 
 router.get('/:id', async (req: Request, res: Response) => {
-  const story = await dbGet('SELECT * FROM stories WHERE id = ?', [req.params.id]);
+  const story = await dbGet<any>('SELECT * FROM stories WHERE id = ?', [req.params.id]);
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
-  res.json({ data: story });
+  const tags = story.tags ? (() => { try { return JSON.parse(story.tags); } catch { return []; } })() : null;
+  res.json({ data: { ...story, tags } });
 });
 
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -66,9 +72,16 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       'INSERT INTO stories (user_id, title, content, metadata, language, country_code) VALUES (?, ?, ?, ?, ?, ?)',
       [req.userId || null, title, content, metadata || null, language, countryCode]
     );
+    const storyId = result.lastInsertRowid;
+
+    // AI story analysis: extract tone and tags (runs synchronously so response includes them)
+    const { tone, tags } = await analyzeStory(content).catch(() => ({ tone: null as string | null, tags: [] as string[] }));
+    if (tone || tags.length > 0) {
+      await dbRun('UPDATE stories SET tone = ?, tags = ? WHERE id = ?', [tone, JSON.stringify(tags), storyId]);
+    }
 
     res.status(201).json({
-      data: { id: result.lastInsertRowid, userId: req.userId || null, title, content, metadata },
+      data: { id: storyId, userId: req.userId || null, title, content, metadata, tone, tags },
     });
   } catch (err) {
     console.error('[Story] Create error:', err);
