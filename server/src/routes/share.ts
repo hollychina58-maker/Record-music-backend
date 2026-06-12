@@ -10,7 +10,7 @@ router.post('/stories/:id/share', async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Story not found' });
     return;
   }
-  const baseUrl = process.env.SHARE_BASE_URL || `${req.protocol}://${req.get('host')}`;
+  const baseUrl = process.env.FRONTEND_URL || process.env.SHARE_BASE_URL || `${req.protocol}://${req.get('host')}`;
   res.json({
     data: {
       shareLink: `${baseUrl}/story/${id}`,

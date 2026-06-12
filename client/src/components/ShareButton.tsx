@@ -1,16 +1,11 @@
 import { useState } from 'react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface ShareButtonProps {
   storyId: number;
+  storyTitle: string;
+  storyTags: string[] | null;
   disabled?: boolean;
-}
-
-interface SharePlatform {
-  name: string;
-  key: string;
-  color: string;
-  url: (link: string, title: string) => string;
-  icon: JSX.Element;
 }
 
 const WechatIcon = () => (
@@ -37,119 +32,123 @@ const WhatsAppIcon = () => (
   </svg>
 );
 
-const WeiboIcon = () => (
-  <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-    <path d="M10.098 20.323c-3.977.391-7.414-1.406-7.672-4.02-.259-2.609 2.759-5.047 6.74-5.441 3.979-.394 7.413 1.404 7.671 4.018.259 2.6-2.759 5.049-6.739 5.443zm-2.865-5.599c-.357-.098-.596-.194-.53-.426.066-.23.355-.368.696-.332.335.035.675.177.76.34.087.166-.155.298-.53.385-.377.085-.22.075-.396.033zm2.003-.278c-.48-.11-.782-.218-.74-.477.044-.263.464-.445 1.015-.44.548.005.943.228.885.49-.06.265-.504.482-.994.464-.058-.005-.133-.02-.166-.037zm2.265-.146c-.229-.064-.397-.138-.343-.283.053-.145.305-.245.62-.223.313.022.562.127.521.26-.04.134-.316.248-.658.26-.05 0-.113-.005-.14-.014zM9.255 15.64c-1.653.686-2.634 2.103-2.225 3.21.405 1.105 2.014 1.58 3.804.955 1.789-.623 2.484-1.844 2.092-2.64-.404-.806-2.067-.927-3.671-.8v.725c.953-.112 2.039-.044 2.4.396.42.512-.127 1.297-1.208 1.758-1.073.454-2.08.33-2.505-.253-.283-.39-.263-.88.329-1.281l.984.655z" />
-    <path d="M20.695 8.156c-1.135-3.435-4.863-5.805-9.04-5.755-4.175.05-7.704 2.55-8.533 6.192-.296 1.297-.227 2.613.197 3.847.422 1.234 1.167 2.298 2.139 3.108-.163.03-.325.05-.49.07-1.011.12-2.02.01-2.962-.32-.287-.1-.743.17-.83.467-.083.282.084.686.422.845 1.278.6 2.712.86 4.117.69.196-.02.386-.06.574-.09a7.815 7.815 0 003.49-.934 7.904 7.904 0 002.704-2.439A8.04 8.04 0 0014.9 10.75c0-.472-.04-.94-.12-1.403-.76-4.373-5.41-7.299-10.371-6.534-4.947.764-8.366 6.04-7.636 11.786a9.59 9.59 0 001.552 3.895 9.7 9.7 0 003.113 2.797c.287.167.676.032.792-.291.117-.327-.052-.706-.368-.85a8.27 8.27 0 01-2.648-2.365 8.163 8.163 0 01-1.32-3.323c-.624-4.916 2.311-9.495 6.546-10.176 4.266-.687 8.327 1.87 8.984 5.703.082.482.123.97.124 1.458a8.356 8.356 0 01-.512 2.902 8.312 8.312 0 01-1.765 2.826c.216-.016.435-.022.652-.022 2.028 0 3.934-.77 5.332-2.08a7.64 7.64 0 00-2.3-4.122z" />
-  </svg>
-);
-
-function buildSharePlatforms(): SharePlatform[] {
-  return [
-    {
-      name: '微信',
-      key: 'wechat',
-      color: '#07C160',
-      icon: <WechatIcon />,
-      url: (_link: string, _title: string) => '',
-    },
-    {
-      name: '微博',
-      key: 'weibo',
-      color: '#E6162D',
-      icon: <WeiboIcon />,
-      url: (l: string, t: string) =>
-        `https://service.weibo.com/share/share.php?url=${encodeURIComponent(l)}&title=${encodeURIComponent(t)}`,
-    },
-    {
-      name: 'X',
-      key: 'twitter',
-      color: '#0F1419',
-      icon: <XIcon />,
-      url: (l: string, t: string) =>
-        `https://twitter.com/intent/tweet?url=${encodeURIComponent(l)}&text=${encodeURIComponent(t)}`,
-    },
-    {
-      name: 'Facebook',
-      key: 'facebook',
-      color: '#1877F2',
-      icon: <FacebookIcon />,
-      url: (l: string) =>
-        `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(l)}`,
-    },
-    {
-      name: 'WhatsApp',
-      key: 'whatsapp',
-      color: '#25D366',
-      icon: <WhatsAppIcon />,
-      url: (l: string, t: string) =>
-        `https://api.whatsapp.com/send?text=${encodeURIComponent(t + ' ' + l)}`,
-    },
-  ];
-}
-
-export function ShareButton({ storyId, disabled }: ShareButtonProps) {
+export function ShareButton({ storyId, storyTitle, storyTags, disabled }: ShareButtonProps) {
+  const { t } = useLanguage();
   const [showPanel, setShowPanel] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
-  const [shareTitle, setShareTitle] = useState('');
   const [copied, setCopied] = useState(false);
+  const [wechatCopied, setWechatCopied] = useState(false);
+
+  const tagText = storyTags && storyTags.length > 0
+    ? storyTags.map(tag => `#${tag}`).join(' ')
+    : '';
+
+  const buildShareText = (link: string) => {
+    const parts = [storyTitle];
+    if (tagText) parts.push(tagText);
+    parts.push(link);
+    return parts.join('\n');
+  };
 
   const handleShare = async () => {
+    if (disabled) return;
     try {
       const { apiService } = await import('../services/api');
-      const story = await apiService.getStoryById(storyId);
       const data = await apiService.shareStory(storyId);
       setShareLink(data.shareLink);
-      setShareTitle(story.title);
-      setShowPanel(true);
 
       // Try native Web Share API first on mobile
       if (navigator.share) {
         try {
           await navigator.share({
-            title: story.title,
-            text: story.content.slice(0, 100),
+            title: storyTitle,
+            text: tagText,
             url: data.shareLink,
           });
           return;
         } catch {
-          // User cancelled or API failed — show panel as fallback
+          // User cancelled or API failed — show panel
         }
       }
+      setShowPanel(true);
     } catch (error) {
       console.error('Failed to generate share link', error);
     }
   };
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      try {
+        const input = document.createElement('input');
+        input.value = text;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  };
+
   const handleCopyLink = async () => {
     if (!shareLink) return;
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback for older browsers
-      const input = document.createElement('input');
-      input.value = shareLink;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
+    const ok = await copyToClipboard(shareLink);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const handleWechatShare = () => {
-    handleCopyLink();
+  const handleWechatShare = async () => {
+    if (!shareLink) return;
+    const ok = await copyToClipboard(shareLink);
+    if (ok) {
+      setWechatCopied(true);
+      setTimeout(() => setWechatCopied(false), 4000);
+    }
   };
 
-  const openShare = (url: string) => {
-    if (!url) return;
-    window.open(url, '_blank', 'width=640,height=480');
+  const openPlatform = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer,width=640,height=480');
   };
 
-  const platforms = shareLink ? buildSharePlatforms() : [];
+  const platforms = [
+    {
+      key: 'wechat',
+      name: t('share.wechat'),
+      color: '#07C160',
+      icon: <WechatIcon />,
+    },
+    {
+      key: 'twitter',
+      name: 'X',
+      color: '#0F1419',
+      icon: <XIcon />,
+      url: (link: string) =>
+        `https://twitter.com/intent/tweet?text=${encodeURIComponent(storyTitle + '\n' + tagText)}&url=${encodeURIComponent(link)}`,
+    },
+    {
+      key: 'facebook',
+      name: 'Facebook',
+      color: '#1877F2',
+      icon: <FacebookIcon />,
+      url: (link: string) =>
+        `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}&quote=${encodeURIComponent(storyTitle + ' ' + tagText)}`,
+    },
+    {
+      key: 'whatsapp',
+      name: 'WhatsApp',
+      color: '#25D366',
+      icon: <WhatsAppIcon />,
+      url: (link: string) =>
+        `https://api.whatsapp.com/send?text=${encodeURIComponent(buildShareText(link))}`,
+    },
+  ];
 
   return (
     <>
@@ -158,38 +157,46 @@ export function ShareButton({ storyId, disabled }: ShareButtonProps) {
         className="share-btn"
         onClick={handleShare}
         disabled={disabled}
-        aria-label="分享"
+        aria-label={t('share.copyLink')}
       >
         <svg viewBox="0 0 24 24" className="share-icon" width="20" height="20">
           <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z" fill="currentColor" />
         </svg>
       </button>
 
-      {showPanel && (
+      {showPanel && shareLink && (
         <div className="share-panel-overlay" onClick={() => setShowPanel(false)}>
           <div className="share-panel" onClick={e => e.stopPropagation()}>
             <button
               type="button"
               className="share-panel-close"
               onClick={() => setShowPanel(false)}
-              aria-label="关闭"
+              aria-label={t('common.back')}
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
-            <h3 className="share-panel-title">分享到</h3>
+
+            {/* 故事标题 + 标签预览 */}
+            <div className="share-preview">
+              <p className="share-preview-title">{storyTitle}</p>
+              {tagText && <p className="share-preview-tags">{tagText}</p>}
+            </div>
+
+            <h3 className="share-panel-title">{t('share.panelTitle')}</h3>
+
             <div className="share-platforms">
               {platforms.map(platform => (
                 <button
                   key={platform.key}
                   type="button"
-                  className={`share-platform-btn ${platform.key === 'wechat' ? 'wechat-btn' : ''}`}
+                  className={`share-platform-btn${platform.key === 'wechat' ? ' wechat-btn' : ''}`}
                   onClick={() => {
                     if (platform.key === 'wechat') {
                       handleWechatShare();
-                    } else {
-                      openShare(platform.url(shareLink!, shareTitle));
+                    } else if (platform.url) {
+                      openPlatform(platform.url(shareLink));
                     }
                   }}
                   style={{ '--platform-color': platform.color } as React.CSSProperties}
@@ -199,25 +206,27 @@ export function ShareButton({ storyId, disabled }: ShareButtonProps) {
                 </button>
               ))}
             </div>
+
+            {wechatCopied && (
+              <p className="share-wechat-hint">{t('share.wechatHint')}</p>
+            )}
+
             <div className="share-link-container">
               <input
                 type="text"
                 readOnly
-                value={shareLink || ''}
+                value={shareLink}
                 className="share-link-input"
                 onClick={e => (e.target as HTMLInputElement).select()}
               />
               <button
                 type="button"
-                className={`share-copy-btn ${copied ? 'copied' : ''}`}
+                className={`share-copy-btn${copied ? ' copied' : ''}`}
                 onClick={handleCopyLink}
               >
-                {copied ? '已复制' : '复制'}
+                {copied ? t('share.copied') : t('share.copyLink')}
               </button>
             </div>
-            {copied && (
-              <p className="copy-hint">链接已复制，请打开微信粘贴分享</p>
-            )}
           </div>
         </div>
       )}

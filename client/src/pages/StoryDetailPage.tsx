@@ -163,7 +163,12 @@ export function StoryDetailPage() {
           </svg>
         </button>
         <div className="header-actions">
-          <ShareButton storyId={story.id} disabled={story.isBurned} />
+          <ShareButton
+            storyId={story.id}
+            storyTitle={story.title}
+            storyTags={story.tags}
+            disabled={story.isBurned}
+          />
           {!story.isBurned && user?.id === story.user_id && (
             <button
               type="button"

@@ -385,6 +385,40 @@
   font-family: var(--font-ink);
 }
 
+.share-preview {
+  background: var(--paper-aged);
+  border-left: 2px solid var(--ink-light);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.share-preview-title {
+  font-family: var(--font-ink);
+  font-size: var(--text-base);
+  color: var(--ink-deep);
+  font-weight: var(--font-weight-medium);
+  margin: 0 0 var(--space-1) 0;
+  line-height: 1.4;
+}
+
+.share-preview-tags {
+  font-size: var(--text-xs);
+  color: var(--ink-light);
+  margin: 0;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.share-wechat-hint {
+  text-align: center;
+  font-size: var(--text-xs);
+  color: #07C160;
+  margin: 0 0 var(--space-3) 0;
+  font-family: var(--font-ink);
+  animation: fadeIn 0.2s ease-out;
+}
+
 /* ============================================
    UTILITY CLASSES
    ============================================ */
