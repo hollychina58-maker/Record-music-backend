@@ -100,9 +100,11 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
       }
     }
 
+    // Persist generation params so URL can be refreshed later if the CDN link expires
+    const generationParams = JSON.stringify({ effectiveText, musicOptions, lyricsMode: lyricsMode || 'ai_generated' });
     const musicRecord = await dbRun(
-      "INSERT INTO music (story_id, status, style, music_type) VALUES (?, 'pending', ?, ?)",
-      [storyId, styleLabel, musicType || 'instrumental']
+      "INSERT INTO music (story_id, status, style, music_type, generation_params) VALUES (?, 'pending', ?, ?, ?)",
+      [storyId, styleLabel, musicType || 'instrumental', generationParams]
     );
     const musicId = musicRecord.lastInsertRowid;
 
@@ -192,11 +194,44 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     if (burned) { res.status(403).json({ error: 'This story has been burned' }); return; }
 
     if (music.file_path.startsWith('http')) {
-      const upstream = await axios.get<NodeJS.ReadableStream>(music.file_path, { responseType: 'stream', timeout: 30000 });
-      res.setHeader('Content-Type', String(upstream.headers['content-type'] || 'audio/mpeg'));
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      if (upstream.headers['content-length']) res.setHeader('Content-Length', String(upstream.headers['content-length']));
-      (upstream.data as NodeJS.ReadableStream).pipe(res);
+      let streamUrl = music.file_path;
+
+      // Probe URL — MiniMax CDN links expire after ~24-48h; refresh silently if stale
+      try {
+        await axios.head(streamUrl, { timeout: 8000 });
+      } catch (probeErr: any) {
+        const status = probeErr?.response?.status;
+        if (status === 403 || status === 404 || status === 410) {
+          // URL expired — regenerate using stored params (no credit deduction)
+          const params = music.generation_params ? JSON.parse(music.generation_params) : null;
+          if (params) {
+            try {
+              console.log('[Music] CDN URL expired, regenerating music id:', music.id);
+              const fresh = await generateMusic(params.effectiveText, params.musicOptions as MusicOptions);
+              await dbRun('UPDATE music SET file_path = ? WHERE id = ?', [fresh.audioUrl, music.id]);
+              streamUrl = fresh.audioUrl;
+            } catch (regenErr) {
+              console.error('[Music] Regeneration failed:', regenErr);
+              res.status(503).json({ error: 'Music URL expired and regeneration failed' });
+              return;
+            }
+          } else {
+            res.status(410).json({ error: 'Music URL expired and no params to regenerate' });
+            return;
+          }
+        }
+        // Non-expiry errors (network issues etc.) — still try to stream with original URL
+      }
+
+      try {
+        const upstream = await axios.get<NodeJS.ReadableStream>(streamUrl, { responseType: 'stream', timeout: 30000 });
+        res.setHeader('Content-Type', String(upstream.headers['content-type'] || 'audio/mpeg'));
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        if (upstream.headers['content-length']) res.setHeader('Content-Length', String(upstream.headers['content-length']));
+        (upstream.data as NodeJS.ReadableStream).pipe(res);
+      } catch {
+        res.status(502).json({ error: 'Failed to stream audio' });
+      }
       return;
     }
 

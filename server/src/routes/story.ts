@@ -35,21 +35,17 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) 
   const where = conditions.join(' AND ');
 
   // Single query: join users for author nickname, left-join latest music for type+status badge
+  // NOTE: avoid ROW_NUMBER() window function — Turso/libsql drops rows when combined with GROUP BY
   const storyQuery = `
     SELECT s.*,
            COUNT(DISTINCT c.id) as comment_count,
            u.nickname as author_nickname,
-           m.status as music_status,
-           m.music_type as music_type
+           (SELECT status FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_status,
+           (SELECT music_type FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_type
     FROM stories s
     LEFT JOIN burned_stories bs ON s.id = bs.story_id
     LEFT JOIN comments c ON s.id = c.story_id
     LEFT JOIN users u ON s.user_id = u.id
-    LEFT JOIN (
-      SELECT story_id, status, music_type,
-             ROW_NUMBER() OVER (PARTITION BY story_id ORDER BY created_at DESC) as rn
-      FROM music
-    ) m ON s.id = m.story_id AND m.rn = 1
     WHERE ${where}
     GROUP BY s.id ORDER BY (s.like_count + COUNT(DISTINCT c.id) * 2) DESC, s.created_at DESC
     LIMIT ? OFFSET ?`;
@@ -62,17 +58,12 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) 
       `SELECT s.*,
               COUNT(DISTINCT c.id) as comment_count,
               u.nickname as author_nickname,
-              m.status as music_status,
-              m.music_type as music_type
+              (SELECT status FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_status,
+              (SELECT music_type FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_type
        FROM stories s
        LEFT JOIN burned_stories bs ON s.id = bs.story_id
        LEFT JOIN comments c ON s.id = c.story_id
        LEFT JOIN users u ON s.user_id = u.id
-       LEFT JOIN (
-         SELECT story_id, status, music_type,
-                ROW_NUMBER() OVER (PARTITION BY story_id ORDER BY created_at DESC) as rn
-         FROM music
-       ) m ON s.id = m.story_id AND m.rn = 1
        WHERE bs.story_id IS NULL AND s.user_id IS NULL
        GROUP BY s.id ORDER BY (s.like_count + COUNT(DISTINCT c.id) * 2) DESC, s.created_at DESC
        LIMIT ? OFFSET ?`,

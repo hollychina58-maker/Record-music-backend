@@ -240,6 +240,7 @@ export async function initDatabase(): Promise<void> {
   await addColumnIfMissing('stories', 'tags', 'TEXT');
   await addColumnIfMissing('stories', 'tone', 'TEXT');
   await addColumnIfMissing('music', 'music_type', "TEXT DEFAULT 'instrumental'");
+  await addColumnIfMissing('music', 'generation_params', 'TEXT');
 
   // Seed default products if none exist
   const productCountResult = await client.execute('SELECT COUNT(*) as count FROM products');
