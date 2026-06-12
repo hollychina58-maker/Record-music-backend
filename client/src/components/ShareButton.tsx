@@ -56,20 +56,6 @@ export function ShareButton({ storyId, storyTitle, storyTags, disabled }: ShareB
       const { apiService } = await import('../services/api');
       const data = await apiService.shareStory(storyId);
       setShareLink(data.shareLink);
-
-      // Try native Web Share API first on mobile
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: storyTitle,
-            text: tagText,
-            url: data.shareLink,
-          });
-          return;
-        } catch {
-          // User cancelled or API failed — show panel
-        }
-      }
       setShowPanel(true);
     } catch (error) {
       console.error('Failed to generate share link', error);
