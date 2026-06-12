@@ -69,9 +69,8 @@ class ApiService {
     );
   }
 
-  async getStories(options?: { language?: string | null; countryCode?: string | null; onlyMine?: boolean }): Promise<Story[]> {
+  async getStories(options?: { countryCode?: string | null; onlyMine?: boolean }): Promise<Story[]> {
     const parts: string[] = [];
-    if (options?.language) parts.push(`language=${encodeURIComponent(options.language)}`);
     if (options?.countryCode) parts.push(`countryCode=${encodeURIComponent(options.countryCode)}`);
     if (options?.onlyMine) parts.push('onlyMine=true');
     const qs = parts.length > 0 ? '?' + parts.join('&') : '';

@@ -217,6 +217,28 @@
   display: block;
 }
 
+/* ===== Story Tags ===== */
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.ink-card__tag {
+  display: inline-block;
+  padding: 1px 8px;
+  background: rgba(15, 15, 15, 0.04);
+  border: 1px solid rgba(15, 15, 15, 0.08);
+  border-radius: 10px;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  color: var(--ink-medium);
+  letter-spacing: 0.03em;
+  line-height: 1.8;
+  white-space: nowrap;
+}
+
 /* ===== Music Type Badges ===== */
 .music-badge {
   flex-shrink: 0;

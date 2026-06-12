@@ -25,13 +25,13 @@ function StoryCardSkeleton({ index }: { index: number }) {
 }
 
 function MusicBadge({ status, type }: { status: string | null; type: string | null }) {
+  const { t } = useLanguage();
   if (!status || status === 'failed') return null;
   if (status === 'pending') {
-    return <span className="music-badge music-badge--pending">♪ 生成中</span>;
+    return <span className="music-badge music-badge--pending">♪ {t('home.music.pending')}</span>;
   }
-  // completed
-  if (type === 'song') return <span className="music-badge music-badge--song">♫ 歌曲</span>;
-  return <span className="music-badge music-badge--music">♪ 音乐</span>;
+  if (type === 'song') return <span className="music-badge music-badge--song">♫ {t('home.music.song')}</span>;
+  return <span className="music-badge music-badge--music">♪ {t('home.music.music')}</span>;
 }
 
 export function HomePage() {
@@ -47,15 +47,18 @@ export function HomePage() {
   const fetchStories = (mine: boolean) => {
     setLoading(true);
     setLoadError(false);
-    const opts = mine
-      ? { onlyMine: true }
-      : { language: geo.language, countryCode: geo.countryCode };
+    const opts = mine ? { onlyMine: true } : { countryCode: geo.countryCode };
     apiService
       .getStories(opts)
       .then((data) => setStories(data))
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   };
+
+  // Reset filter when user logs out
+  useEffect(() => {
+    if (!isAuthenticated) setOnlyMine(false);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (geo.loading && !onlyMine) {
@@ -65,16 +68,14 @@ export function HomePage() {
     let cancelled = false;
     setLoading(true);
     setLoadError(false);
-    const opts = onlyMine
-      ? { onlyMine: true }
-      : { language: geo.language, countryCode: geo.countryCode };
+    const opts = onlyMine ? { onlyMine: true } : { countryCode: geo.countryCode };
     apiService
       .getStories(opts)
       .then((data) => { if (!cancelled) setStories(data); })
       .catch(() => { if (!cancelled) setLoadError(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [geo.loading, geo.language, geo.countryCode, onlyMine]);
+  }, [geo.loading, geo.countryCode, onlyMine]);
 
   const handleOnlyMineToggle = () => {
     if (!isAuthenticated) return;
@@ -107,7 +108,7 @@ export function HomePage() {
             className={`filter-btn${onlyMine ? ' filter-btn--active' : ''}`}
             onClick={handleOnlyMineToggle}
           >
-            {onlyMine ? t('home.filter.myStories') : t('home.filter.allStories')}
+            {onlyMine ? t('home.filter.myStories') : t('home.filter.mine')}
           </button>
         </div>
       )}

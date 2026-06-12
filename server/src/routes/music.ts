@@ -231,22 +231,29 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
 });
 
 router.get('/:id/download', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const music = await dbGet<any>('SELECT * FROM music WHERE id = ?', [req.params.id]);
+  const music = await dbGet<any>(
+    `SELECT m.*, s.user_id as story_user_id FROM music m
+     JOIN stories s ON m.story_id = s.id WHERE m.id = ?`,
+    [req.params.id]
+  );
   if (!music?.file_path) { res.status(404).json({ error: 'Music file not available' }); return; }
+  if (music.story_user_id !== req.userId) { res.status(403).json({ error: 'Only the author can download this music' }); return; }
 
   if (music.file_path.startsWith('http')) {
-    const storyRow = await dbGet<{ user_id: number | null }>(
-      'SELECT s.user_id FROM stories s JOIN music m ON m.story_id = s.id WHERE m.id = ?', [req.params.id]
-    );
-    if (!storyRow || storyRow.user_id !== req.userId) { res.status(403).json({ error: 'Only the author can download this music' }); return; }
     res.redirect(302, music.file_path);
     return;
   }
 
   if (!fs.existsSync(music.file_path)) { res.status(404).json({ error: 'Music file not found' }); return; }
-  res.setHeader('Content-Disposition', `attachment; filename="${path.basename(music.file_path)}"`);
+
+  // Path traversal guard: resolve and confirm file is within storage root
+  const storagePath = path.resolve(process.env.STORAGE_PATH || './storage');
+  const resolvedPath = path.resolve(music.file_path);
+  if (!resolvedPath.startsWith(storagePath)) { res.status(403).json({ error: 'Access denied' }); return; }
+
+  res.setHeader('Content-Disposition', `attachment; filename="${path.basename(resolvedPath)}"`);
   res.setHeader('Content-Type', 'audio/mpeg');
-  res.sendFile(path.resolve(music.file_path));
+  res.sendFile(resolvedPath);
 });
 
 export default router;

@@ -390,8 +390,9 @@
   box-shadow: 0 0 0 2px rgba(15, 15, 15, 0.04);
 }
 
-/* Lyrics mode radio group */
-.music-option--lyrics {
+/* Music mode / lyrics mode radio group */
+.music-option--lyrics,
+.music-option--mode {
   align-items: flex-start;
   flex-direction: column;
   gap: 10px;

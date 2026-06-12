@@ -21,8 +21,11 @@ export function CreateStoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ title?: string; content?: string }>({});
   const [withMusic, setWithMusic] = useState(false);
-  const [musicType, setMusicType] = useState<'instrumental' | 'song'>('instrumental');
-  const [lyricsMode, setLyricsMode] = useState<'story_as_lyrics' | 'ai_generated'>('ai_generated');
+  // musicMode encodes both musicType and lyricsMode in one choice:
+  //   'instrumental'       → musicType=instrumental
+  //   'song_ai'            → musicType=song, lyricsMode=ai_generated
+  //   'song_as_lyrics'     → musicType=song, lyricsMode=story_as_lyrics
+  const [musicMode, setMusicMode] = useState<'instrumental' | 'song_ai' | 'song_as_lyrics'>('instrumental');
   const [musicGenre, setMusicGenre] = useState('chinese_folk');
 
   useEffect(() => {
@@ -82,6 +85,8 @@ export function CreateStoryPage() {
 
       if (withMusic && user) {
         try {
+          const musicType = musicMode === 'instrumental' ? 'instrumental' : 'song';
+          const lyricsMode = musicMode === 'song_as_lyrics' ? 'story_as_lyrics' : 'ai_generated';
           const result = await apiService.generateMusic(story.id, story.content, {
             musicType,
             musicGenre,
@@ -213,47 +218,35 @@ export function CreateStoryPage() {
 
             {withMusic && (
               <div className="music-options">
-                <div className="music-option">
-                  <label>{t('create.musicType')}</label>
-                  <select value={musicType} onChange={(e) => setMusicType(e.target.value as 'instrumental' | 'song')}>
-                    <option value="instrumental">{t('create.instrumental')}</option>
-                    <option value="song">{t('create.song')}</option>
-                  </select>
-                </div>
-
-                {musicType === 'song' && (
-                  <div className="music-option music-option--lyrics">
-                    <label>{t('create.lyricsMode')}</label>
-                    <div className="lyrics-mode-group">
-                      <label className={`lyrics-mode-choice${lyricsMode === 'story_as_lyrics' ? ' lyrics-mode-choice--active' : ''}`}>
+                <div className="music-option music-option--mode">
+                  <label>{t('create.musicMode')}</label>
+                  <div className="lyrics-mode-group">
+                    {(
+                      [
+                        { value: 'instrumental', labelKey: 'create.mode.instrumental', hintKey: 'create.mode.instrumentalHint' },
+                        { value: 'song_ai',       labelKey: 'create.mode.songAi',       hintKey: 'create.mode.songAiHint' },
+                        { value: 'song_as_lyrics',labelKey: 'create.mode.songLyrics',   hintKey: 'create.mode.songLyricsHint' },
+                      ] as const
+                    ).map(({ value, labelKey, hintKey }) => (
+                      <label
+                        key={value}
+                        className={`lyrics-mode-choice${musicMode === value ? ' lyrics-mode-choice--active' : ''}`}
+                      >
                         <input
                           type="radio"
-                          name="lyricsMode"
-                          value="story_as_lyrics"
-                          checked={lyricsMode === 'story_as_lyrics'}
-                          onChange={() => setLyricsMode('story_as_lyrics')}
+                          name="musicMode"
+                          value={value}
+                          checked={musicMode === value}
+                          onChange={() => setMusicMode(value)}
                         />
                         <span className="lyrics-mode-label">
-                          <strong>{t('create.lyricsMode.story')}</strong>
-                          <em>{t('create.lyricsMode.storyHint')}</em>
+                          <strong>{t(labelKey)}</strong>
+                          <em>{t(hintKey)}</em>
                         </span>
                       </label>
-                      <label className={`lyrics-mode-choice${lyricsMode === 'ai_generated' ? ' lyrics-mode-choice--active' : ''}`}>
-                        <input
-                          type="radio"
-                          name="lyricsMode"
-                          value="ai_generated"
-                          checked={lyricsMode === 'ai_generated'}
-                          onChange={() => setLyricsMode('ai_generated')}
-                        />
-                        <span className="lyrics-mode-label">
-                          <strong>{t('create.lyricsMode.ai')}</strong>
-                          <em>{t('create.lyricsMode.aiHint')}</em>
-                        </span>
-                      </label>
-                    </div>
+                    ))}
                   </div>
-                )}
+                </div>
 
                 <div className="music-option">
                   <label>{t('create.musicGenre')}</label>
