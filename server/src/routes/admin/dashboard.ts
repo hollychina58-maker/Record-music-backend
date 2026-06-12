@@ -22,7 +22,7 @@ router.get('/stats', authMiddleware, adminMiddleware, async (_req: AuthRequest, 
     dbGet<{ total: number }>("SELECT COALESCE(SUM(total_cents), 0) as total FROM orders WHERE status = 'completed' AND date(created_at) = date('now')"),
     dbGet<{ total: number }>("SELECT COALESCE(SUM(total_cents), 0) as total FROM orders WHERE status = 'completed' AND created_at >= datetime('now', 'start of month')"),
     dbGet<{ total: number }>("SELECT COALESCE(SUM(total_cents), 0) as total FROM orders WHERE status = 'completed'"),
-    dbAll<any>("SELECT date(created_at) as day, COUNT(*) as count FROM music_usage WHERE created_at >= datetime('now', '-30 days') GROUP BY date(created_at) ORDER BY day ASC"),
+    dbAll<any>("SELECT date(used_at) as day, COUNT(*) as count FROM music_usage WHERE used_at >= datetime('now', '-30 days') GROUP BY date(used_at) ORDER BY day ASC"),
     dbAll<any>("SELECT date(created_at) as day, COALESCE(SUM(total_cents), 0) as totalCents FROM orders WHERE status = 'completed' AND created_at >= datetime('now', '-30 days') GROUP BY date(created_at) ORDER BY day ASC"),
     dbAll<any>("SELECT o.id, o.plan_type, o.total_cents, o.status, o.created_at, u.email, u.nickname FROM orders o JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC LIMIT 8"),
   ]);
