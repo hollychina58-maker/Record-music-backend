@@ -229,7 +229,10 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => {
-        useAuthStore.setState({ isHydrated: true });
+        // Zustand v4: return a callback that runs after storage is read
+        return (_state, error) => {
+          useAuthStore.setState({ isHydrated: true });
+        };
       },
     }
   )
