@@ -4,6 +4,7 @@ import { apiService, Story } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useToast } from '../components/Toast';
+import { useSeo } from '../hooks/useSeo';
 import { CommentSection } from '../components/CommentSection';
 import { ShareButton } from '../components/ShareButton';
 import { BurnConfirmModal } from '../components/BurnConfirmModal';
@@ -33,6 +34,50 @@ export function StoryDetailPage() {
   const [commentLikes, setCommentLikes] = useState<Record<number, boolean>>({});
   const prevAuthRef = useRef(isAuthenticated);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // SEO + JSON-LD structured data
+  useSeo(
+    story
+      ? {
+          title: story.title,
+          description: story.content.slice(0, 160) + (story.content.length > 160 ? '…' : ''),
+          ogTitle: story.title,
+          ogDescription: story.content.slice(0, 160),
+          ogImage: 'https://ustory-umusic.com/icon-512.png',
+          canonical: `https://ustory-umusic.com/story/${story.id}`,
+          jsonLd: {
+            '@context': 'https://schema.org',
+            '@type': 'Article',
+            headline: story.title,
+            author: {
+              '@type': 'Person',
+              name: story.author_nickname || '匿名作者',
+            },
+            datePublished: story.created_at,
+            description: story.content.slice(0, 160),
+            ...(story.tags && story.tags.length > 0
+              ? { keywords: story.tags.join(', ') }
+              : {}),
+            ...(story.music_status === 'completed'
+              ? { about: { '@type': 'MusicComposition', name: `${story.title} — 配乐` } }
+              : {}),
+            publisher: {
+              '@type': 'Organization',
+              name: '墨韵',
+              url: 'https://ustory-umusic.com',
+              logo: {
+                '@type': 'ImageObject',
+                url: 'https://ustory-umusic.com/icon-512.png',
+              },
+            },
+            mainEntityOfPage: {
+              '@type': 'WebPage',
+              '@id': `https://ustory-umusic.com/story/${story.id}`,
+            },
+          },
+        }
+      : {},
+  );
 
   const removePendingFromStorage = (musicId: number) => {
     try {

@@ -136,12 +136,32 @@
 
 @media (max-width: 640px) {
   .global-nav-inner {
-    padding: 0 var(--space-4);
+    padding: 0 var(--space-3);
+  }
+
+  .nav-brand {
+    font-size: 0.95rem;
+    letter-spacing: 0.06em;
+  }
+
+  /* Horizontal scroll for nav links on small screens */
+  .nav-links {
+    gap: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%);
+  }
+
+  .nav-links::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-link {
-    padding: 4px 8px;
+    padding: 5px 10px;
     font-size: var(--text-2xs);
+    flex-shrink: 0;
   }
 
   .nav-user {
@@ -151,5 +171,6 @@
   .nav-logout-btn {
     font-size: var(--text-2xs);
     padding: 4px 8px;
+    flex-shrink: 0;
   }
 }

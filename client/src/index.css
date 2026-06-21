@@ -420,6 +420,53 @@
 }
 
 /* ============================================
+   SHARE PANEL — MOBILE
+   ============================================ */
+
+@media (max-width: 480px) {
+  .share-panel {
+    width: calc(100% - 24px);
+    max-width: none;
+    padding: var(--space-4) var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    max-height: 60vh;
+    position: fixed;
+    bottom: 0;
+    left: 12px;
+    right: 12px;
+    margin: 0;
+    animation: slideUp 0.3s var(--ease-out-expo);
+  }
+
+  .share-panel-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .share-preview {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .share-platforms {
+    gap: var(--space-3);
+  }
+
+  .share-platform-btn {
+    min-width: 56px;
+    padding: var(--space-2);
+  }
+
+  .share-link-input {
+    font-size: 0.7rem;
+  }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* ============================================
    UTILITY CLASSES
    ============================================ */
 
