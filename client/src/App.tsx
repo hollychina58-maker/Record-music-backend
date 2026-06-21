@@ -88,11 +88,26 @@ function PendingMusicPoller() {
 
 function App() {
   const { language, dir } = useLanguage();
+  const isHydrated = useAuthStore((s) => s.isHydrated);
 
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = dir;
   }, [language, dir]);
+
+  // Wait for Zustand persist rehydration before rendering — prevents
+  // blank/flash when auth state hasn't been restored from localStorage yet.
+  if (!isHydrated) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: '100dvh', background: '#f7f5f0',
+        color: '#a8a8a8', fontFamily: '"Noto Serif SC", serif', fontSize: '1rem'
+      }}>
+        研墨中...
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter>
