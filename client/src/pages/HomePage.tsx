@@ -68,13 +68,17 @@ export function HomePage() {
     let cancelled = false;
     setLoading(true);
     setLoadError(false);
+    // Safety timeout: force loading off after 8s to prevent blank-page lock
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 8000);
     const opts = onlyMine ? { onlyMine: true } : { countryCode: geo.countryCode };
     apiService
       .getStories(opts)
-      .then((data) => { if (!cancelled) setStories(data); })
-      .catch(() => { if (!cancelled) setLoadError(true); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((data) => { if (!cancelled) { clearTimeout(safetyTimer); setStories(data); } })
+      .catch(() => { if (!cancelled) { clearTimeout(safetyTimer); setLoadError(true); } })
+      .finally(() => { if (!cancelled) { clearTimeout(safetyTimer); setLoading(false); } });
+    return () => { cancelled = true; clearTimeout(safetyTimer); };
   }, [geo.loading, geo.countryCode, onlyMine]);
 
   const handleOnlyMineToggle = () => {
