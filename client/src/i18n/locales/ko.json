@@ -41,7 +41,7 @@
   "create.publishBtn": "게시",
   "create.publishing": "게시 중...",
   "create.musicToggle": "음악 생성하기（남은 횟수 {count}）",
-  "create.coverToggle": "AI 커버 이미지 생성",
+  "create.coverToggle": "당신의 이야기 이미지 생성",
   "create.noFreeMusic": "무료 횟수를 모두 사용했습니다",
   "create.buyNow": "플랜 구매",
   "create.generating": "음악 생성 중...",

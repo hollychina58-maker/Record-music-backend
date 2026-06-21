@@ -39,7 +39,7 @@
   "create.publishBtn": "Publish",
   "create.publishing": "Ink still drying...",
   "create.musicToggle": "Generate music ( {count} left )",
-  "create.coverToggle": "Generate AI cover image",
+  "create.coverToggle": "Generate an image for your story",
   "create.noFreeMusic": "No free generation left",
   "create.buyNow": "Get Plan",
   "create.generating": "Composing music...",

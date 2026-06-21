@@ -37,7 +37,7 @@
   "create.publishBtn": "نشر",
   "create.publishing": "الحبر لا يزال رطباً...",
   "create.musicToggle": "توليد موسيقى (متبقي {count})",
-  "create.coverToggle": "توليد صورة غلاف بالذكاء الاصطناعي",
+  "create.coverToggle": "توليد صورة لقصتك",
   "create.noFreeMusic": "انتهت التوليدات المجانية",
   "create.buyNow": "اشتر خطة",
   "create.generating": "تأليف الموسيقى...",

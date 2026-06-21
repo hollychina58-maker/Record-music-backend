@@ -41,7 +41,7 @@
   "create.publishBtn": "投稿",
   "create.publishing": "投稿中...",
   "create.musicToggle": "BGMを生成する（残り {count} 回）",
-  "create.coverToggle": "AIカバー画像を生成",
+  "create.coverToggle": "あなたの物語の画像を生成",
   "create.noFreeMusic": "無料回数を使い切りました",
   "create.buyNow": "プランを購入",
   "create.generating": "音楽を生成中...",

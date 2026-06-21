@@ -39,7 +39,7 @@
   "create.publishBtn": "发布",
   "create.publishing": "墨迹未干...",
   "create.musicToggle": "同时生成配乐（剩余 {count} 次）",
-  "create.coverToggle": "生成 AI 封面图",
+  "create.coverToggle": "生成属于您故事的图",
   "create.noFreeMusic": "免费次数已用完",
   "create.buyNow": "去购买",
   "create.generating": "配乐生成中...",
