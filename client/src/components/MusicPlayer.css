@@ -14,7 +14,9 @@
   min-width: 0; /* allow shrink on narrow mobile screens */
   max-width: 100%;
   box-shadow: var(--shadow-mist);
-  transition: all var(--transition-normal) var(--ease-out-expo);
+  transition: box-shadow var(--transition-normal) var(--ease-out-expo),
+              border-color var(--transition-normal) var(--ease-out-expo);
+  contain: layout style; /* isolate repaints — prevent mobile flicker */
 }
 
 /* Play state glow */

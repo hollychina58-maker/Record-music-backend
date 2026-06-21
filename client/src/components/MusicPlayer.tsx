@@ -15,6 +15,7 @@ interface MusicPlayerProps {
 export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDownload }: MusicPlayerProps) {
   const { t } = useLanguage();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const rafRef = useRef<number>(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -28,7 +29,17 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
     audioRef.current = audio;
 
     const onLoaded = () => setDuration(audio.duration);
-    const onTime = () => setCurrentTime(audio.currentTime);
+    // Throttle timeupdate via rAF — avoid excessive re-renders on mobile
+    let ticking = false;
+    const onTime = () => {
+      if (!ticking) {
+        rafRef.current = requestAnimationFrame(() => {
+          setCurrentTime(audio.currentTime);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
     const onEnd = () => setIsPlaying(false);
     const onError = () => {};
     const onCanPlay = () => {};
@@ -42,6 +53,7 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
     audio.addEventListener('stalled', onStalled);
 
     return () => {
+      cancelAnimationFrame(rafRef.current);
       audio.pause();
       audio.removeEventListener('loadedmetadata', onLoaded);
       audio.removeEventListener('timeupdate', onTime);
