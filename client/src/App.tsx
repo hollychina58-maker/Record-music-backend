@@ -15,6 +15,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { PaymentPage } from './pages/PaymentPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { MySpacePage } from './pages/MySpacePage';
+import { PhotoInspirationPage } from './pages/PhotoInspirationPage';
 
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout').then(m => ({ default: m.AdminLayout })));
 const Dashboard = lazy(() => import('./pages/admin/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -102,6 +103,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/create" element={<CreateStoryPage />} />
+            <Route path="/inspiration" element={<PhotoInspirationPage />} />
             <Route path="/story/:id" element={<StoryDetailPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/my-space" element={<MySpacePage />} />

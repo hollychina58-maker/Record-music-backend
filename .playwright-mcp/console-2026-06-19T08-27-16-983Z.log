@@ -1,0 +1,2 @@
+[     122ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://ustory-umusic.com/create:0
+[     144ms] [WARNING] Error while trying to use the following icon from the Manifest: https://ustory-umusic.com/icon-192.png (Download error or resource isn't a valid image) @ https://ustory-umusic.com/create:0

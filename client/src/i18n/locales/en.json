@@ -7,6 +7,8 @@
   "nav.logout": "Logout",
   "nav.login": "Login",
   "nav.register": "Register",
+  "nav.writeDirect": "Write Directly",
+  "nav.writeInspiration": "Photo Inspiration",
   "lang.selector": "Language",
   "lang.zh": "中文",
   "lang.en": "English",
@@ -189,5 +191,16 @@
   "burn.warning": "This action cannot be undone. The story will turn to ash, leaving only a trace of ink as proof it once existed.",
   "burn.keep": "Keep This Story",
   "burn.confirm": "Burn",
-  "burn.ignited": "Ink burns, turning to dust and smoke"
+  "burn.ignited": "Ink burns, turning to dust and smoke",
+  "inspiration.title": "Photo Inspiration",
+  "inspiration.subtitle": "A photo to spark your story",
+  "inspiration.upload": "Tap or drag to upload a photo",
+  "inspiration.reupload": "Re-upload",
+  "inspiration.analyze": "Analyze",
+  "inspiration.analyzing": "AI is reading the photo...",
+  "inspiration.description": "Description",
+  "inspiration.mood": "Mood",
+  "inspiration.elements": "Elements",
+  "inspiration.inspiration": "Story Inspiration",
+  "inspiration.startWriting": "Start Writing →"
 }

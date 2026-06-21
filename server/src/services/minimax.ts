@@ -386,3 +386,58 @@ export async function generateCoverImage(prompt: string): Promise<{ imageUrl: st
 
   return { imageUrl };
 }
+
+/** Photo inspiration — analyze uploaded image via MiniMax VLM */
+export async function analyzePhotoImage(imageBase64: string): Promise<{
+  description: string;
+  mood: string;
+  elements: string;
+  inspiration: string;
+}> {
+  const apiKey = process.env.MINIMAX_API_KEY;
+  if (!apiKey) throw new Error('MiniMax API credentials not configured');
+
+  const baseUrl = process.env.MINIMAX_API_URL || 'https://api.minimaxi.com/v1';
+
+  const prompt = [
+    '请分析这张照片，用中文给出：',
+    '1. 照片描述（30字内）',
+    '2. 情绪基调（如喜悦/悲伤/平静/孤独/温暖等，一个词）',
+    '3. 场景元素（用逗号分隔的关键词，如 黄昏,海边,孤影）',
+    '4. 灵感故事开头（50字内，直接是故事正文）',
+    '请严格按以下JSON格式回复（不要加任何解释）：',
+    '{"description":"...","mood":"...","elements":"...","inspiration":"..."}',
+  ].join('\n');
+
+  const response = await axios.post<{
+    content?: string;
+    base_resp?: { status_code: number; status_msg: string };
+  }>(`${baseUrl}/coding_plan/vlm`, {
+    model: 'vlm',
+    prompt,
+    image_url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`,
+  }, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    timeout: 30000,
+  });
+
+  if (response.data.base_resp && response.data.base_resp.status_code !== 0) {
+    throw new Error(response.data.base_resp.status_msg || 'MiniMax VLM API error');
+  }
+
+  const content = response.data.content || '';
+  // Parse JSON from response (may be wrapped in markdown)
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Failed to parse VLM response');
+
+  const parsed = JSON.parse(jsonMatch[0]);
+  return {
+    description: parsed.description || '',
+    mood: parsed.mood || 'peace',
+    elements: parsed.elements || '',
+    inspiration: parsed.inspiration || '',
+  };
+}

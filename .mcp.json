@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "C:\\Users\\Lee\\AppData\\Roaming\\npm\\playwright-mcp.cmd",
+      "args": [
+        "--headless",
+        "--browser",
+        "chromium",
+        "--viewport-size",
+        "1280x720"
+      ]
+    }
+  }
+}

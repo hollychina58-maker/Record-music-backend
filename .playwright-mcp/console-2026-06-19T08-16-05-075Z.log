@@ -1,0 +1,12 @@
+[    2884ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://ustory-umusic.com/:0
+[    3131ms] [WARNING] Error while trying to use the following icon from the Manifest: https://ustory-umusic.com/icon-192.png (Download error or resource isn't a valid image) @ https://ustory-umusic.com/:0
+[  127706ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://record-music-backend.onrender.com/api/auth/login:0
+[  178481ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "username"): (More info: https://goo.gl/9p2vKq) %o @ https://ustory-umusic.com/register:0
+[  254075ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://record-music-backend.onrender.com/api/music/by-story/3:0
+[  361344ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://ustory-umusic.com/story/3:0
+[  361606ms] [WARNING] Error while trying to use the following icon from the Manifest: https://ustory-umusic.com/icon-192.png (Download error or resource isn't a valid image) @ https://ustory-umusic.com/story/3:0
+[  364561ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://record-music-backend.onrender.com/api/music/by-story/3:0
+[  525495ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://ustory-umusic.com/create:0
+[  525517ms] [WARNING] Error while trying to use the following icon from the Manifest: https://ustory-umusic.com/icon-192.png (Download error or resource isn't a valid image) @ https://ustory-umusic.com/create:0
+[  554822ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://ustory-umusic.com/:0
+[  554834ms] [WARNING] Error while trying to use the following icon from the Manifest: https://ustory-umusic.com/icon-192.png (Download error or resource isn't a valid image) @ https://ustory-umusic.com/:0

@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import { initDatabase, closeDatabase } from './models/database.js';
 import { lookupGeo, countryToLanguage } from './services/geoip.js';
+import { analyzePhotoImage } from './services/minimax.js';
 import { seedDefaultStory } from './services/seed.js';
 import storyRoutes from './routes/story.js';
 import userRoutes from './routes/user.js';
@@ -44,7 +45,7 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -72,6 +73,23 @@ app.get('/api/geo', (req, res) => {
   const geo = lookupGeo(clientIp);
   const language = countryToLanguage(geo.countryCode);
   res.json({ data: { countryCode: geo.countryCode, language } });
+});
+
+// Photo inspiration — analyze uploaded image with MiniMax VLM
+app.post('/api/photo-inspiration', async (req, res) => {
+  try {
+    const { image } = req.body;
+    if (!image || typeof image !== 'string') {
+      res.status(400).json({ error: 'image (base64 or data URL) is required' });
+      return;
+    }
+    const result = await analyzePhotoImage(image);
+    res.json({ data: result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[PhotoInspiration] Error:', message);
+    res.status(500).json({ error: message });
+  }
 });
 
 app.use('/api/story', storyRoutes);

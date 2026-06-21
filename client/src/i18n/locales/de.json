@@ -7,6 +7,8 @@
   "nav.logout": "Abmelden",
   "nav.login": "Anmelden",
   "nav.register": "Registrieren",
+  "nav.writeDirect": "Direkt schreiben",
+  "nav.writeInspiration": "Foto-Inspiration",
   "lang.selector": "Sprache",
   "lang.zh": "中文",
   "lang.en": "English",
@@ -128,5 +130,16 @@
   "burn.warning": "Diese Aktion kann nicht rückgängig gemacht werden. Die Geschichte wird zu Asche, nur eine Spur Tinte bleibt als Beweis ihrer Existenz.",
   "burn.keep": "Diese Geschichte behalten",
   "burn.confirm": "Verbrennen",
-  "burn.ignited": "Tinte verbrennt, wird zu Staub und Rauch"
+  "burn.ignited": "Tinte verbrennt, wird zu Staub und Rauch",
+  "inspiration.title": "Foto-Inspiration",
+  "inspiration.subtitle": "Ein Foto, das Ihre Geschichte entzündet",
+  "inspiration.upload": "Foto hochladen",
+  "inspiration.reupload": "Erneut hochladen",
+  "inspiration.analyze": "Analysieren",
+  "inspiration.analyzing": "KI analysiert das Foto...",
+  "inspiration.description": "Beschreibung",
+  "inspiration.mood": "Stimmung",
+  "inspiration.elements": "Elemente",
+  "inspiration.inspiration": "Inspiration",
+  "inspiration.startWriting": "Schreiben beginnen →"
 }

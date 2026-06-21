@@ -7,6 +7,8 @@
   "nav.logout": "ログアウト",
   "nav.login": "ログイン",
   "nav.register": "登録",
+  "nav.writeDirect": "直接書く",
+  "nav.writeInspiration": "写真インスピレーション",
   "lang.selector": "言語",
   "lang.zh": "中文",
   "lang.en": "English",
@@ -191,5 +193,16 @@
   "burn.warning": "この操作は元に戻せません。物語は灰になり、存在した証としてわずかな墨跡だけが残ります。",
   "burn.keep": "この物語を残す",
   "burn.confirm": "焼却する",
-  "burn.ignited": "墨が燃え、塵と煙となった"
+  "burn.ignited": "墨が燃え、塵と煙となった",
+  "inspiration.title": "写真インスピレーション",
+  "inspiration.subtitle": "一枚の写真が物語を灯す",
+  "inspiration.upload": "写真をアップロード",
+  "inspiration.reupload": "再アップロード",
+  "inspiration.analyze": "分析する",
+  "inspiration.analyzing": "AIが写真を読み取っています...",
+  "inspiration.description": "説明",
+  "inspiration.mood": "ムード",
+  "inspiration.elements": "要素",
+  "inspiration.inspiration": "インスピレーション",
+  "inspiration.startWriting": "書き始める →"
 }

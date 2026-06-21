@@ -7,6 +7,8 @@
   "nav.logout": "خروج",
   "nav.login": "دخول",
   "nav.register": "تسجيل",
+  "nav.writeDirect": "اكتب مباشرة",
+  "nav.writeInspiration": "إلهام الصورة",
   "lang.selector": "اللغة",
   "lang.zh": "中文",
   "lang.en": "English",
@@ -128,5 +130,16 @@
   "burn.warning": "هذا الإجراء لا يمكن التراجع عنه. ستتحول القصة إلى رماد، تاركة فقط أثراً من الحبر كدليل على وجودها.",
   "burn.keep": "احتفظ بهذه القصة",
   "burn.confirm": "حرق",
-  "burn.ignited": "الحبر يحترق، يتحول إلى غبار ودخان"
+  "burn.ignited": "الحبر يحترق، يتحول إلى غبار ودخان",
+  "inspiration.title": "إلهام الصورة",
+  "inspiration.subtitle": "صورة تشعل قصتك",
+  "inspiration.upload": "اضغط أو اسحب لتحميل صورة",
+  "inspiration.reupload": "إعادة التحميل",
+  "inspiration.analyze": "تحليل",
+  "inspiration.analyzing": "الذكاء الاصطناعي يقرأ الصورة...",
+  "inspiration.description": "الوصف",
+  "inspiration.mood": "المزاج",
+  "inspiration.elements": "العناصر",
+  "inspiration.inspiration": "إلهام القصة",
+  "inspiration.startWriting": "ابدأ الكتابة →"
 }

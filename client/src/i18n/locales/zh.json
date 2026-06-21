@@ -7,6 +7,8 @@
   "nav.logout": "退出",
   "nav.login": "登录",
   "nav.register": "注册",
+  "nav.writeDirect": "直接写作",
+  "nav.writeInspiration": "照片灵感",
   "lang.selector": "语言",
   "lang.zh": "中文",
   "lang.en": "English",
@@ -189,5 +191,16 @@
   "burn.warning": "此操作不可逆。焚烧后故事将化为尘烟，仅留一句墨迹作为存在过的证明。",
   "burn.keep": "留住此篇",
   "burn.confirm": "焚烧",
-  "burn.ignited": "墨迹燃尽，化为尘烟"
+  "burn.ignited": "墨迹燃尽，化为尘烟",
+  "inspiration.title": "照片灵感",
+  "inspiration.subtitle": "用一张照片，点燃故事灵感",
+  "inspiration.upload": "点击或拖拽上传照片",
+  "inspiration.reupload": "重新上传",
+  "inspiration.analyze": "开始分析",
+  "inspiration.analyzing": "AI 正在感知照片意境...",
+  "inspiration.description": "照片描述",
+  "inspiration.mood": "情绪基调",
+  "inspiration.elements": "场景元素",
+  "inspiration.inspiration": "灵感故事开头",
+  "inspiration.startWriting": "开始写作 →"
 }

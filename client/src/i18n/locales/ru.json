@@ -7,6 +7,8 @@
   "nav.logout": "Выйти",
   "nav.login": "Войти",
   "nav.register": "Регистрация",
+  "nav.writeDirect": "Писать сразу",
+  "nav.writeInspiration": "Фото-вдохновение",
   "lang.selector": "Язык",
   "lang.zh": "中文",
   "lang.en": "English",
@@ -128,5 +130,16 @@
   "burn.warning": "Это действие необратимо. История превратится в пепел, оставив лишь след чернил как доказательство существования.",
   "burn.keep": "Сохранить эту историю",
   "burn.confirm": "Сжечь",
-  "burn.ignited": "Чернила горят, превращаясь в пыль и дым"
+  "burn.ignited": "Чернила горят, превращаясь в пыль и дым",
+  "inspiration.title": "Фото-вдохновение",
+  "inspiration.subtitle": "Фото, чтобы зажечь вашу историю",
+  "inspiration.upload": "Загрузить фото",
+  "inspiration.reupload": "Загрузить снова",
+  "inspiration.analyze": "Анализировать",
+  "inspiration.analyzing": "ИИ анализирует фото...",
+  "inspiration.description": "Описание",
+  "inspiration.mood": "Настроение",
+  "inspiration.elements": "Элементы",
+  "inspiration.inspiration": "Вдохновение",
+  "inspiration.startWriting": "Начать писать →"
 }

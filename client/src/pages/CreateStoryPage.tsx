@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { VoiceInput } from '../components/VoiceInput';
 import { apiService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -28,6 +28,16 @@ export function CreateStoryPage() {
   //   'song_as_lyrics'     → musicType=song, lyricsMode=story_as_lyrics
   const [musicMode, setMusicMode] = useState<'instrumental' | 'song_ai' | 'song_as_lyrics'>('instrumental');
   const [musicGenre, setMusicGenre] = useState('chinese_folk');
+  const [searchParams] = useSearchParams();
+
+  // Carry-over from photo inspiration page
+  useEffect(() => {
+    const inspiration = searchParams.get('inspiration');
+    if (inspiration) {
+      setContent(inspiration + '\n\n');
+      setWithMusic(true);
+    }
+  }, []); // Only on mount
 
   useEffect(() => {
     if (!isAuthenticated) {

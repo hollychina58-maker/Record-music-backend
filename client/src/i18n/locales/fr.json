@@ -7,6 +7,8 @@
   "nav.logout": "Déconnexion",
   "nav.login": "Connexion",
   "nav.register": "Inscription",
+  "nav.writeDirect": "Écrire directement",
+  "nav.writeInspiration": "Photo inspiration",
   "lang.selector": "Langue",
   "lang.zh": "中文",
   "lang.en": "English",
@@ -144,5 +146,16 @@
   "burn.warning": "Cette action est irréversible. L'histoire sera réduite en cendres, ne laissant qu'une trace d'encre comme preuve de son existence.",
   "burn.keep": "Garder cette histoire",
   "burn.confirm": "Brûler",
-  "burn.ignited": "L'encre brûle, se transformant en poussière et fumée"
+  "burn.ignited": "L'encre brûle, se transformant en poussière et fumée",
+  "inspiration.title": "Photo Inspiration",
+  "inspiration.subtitle": "Une photo pour allumer votre histoire",
+  "inspiration.upload": "Touchez ou glissez une photo",
+  "inspiration.reupload": "Réimporter",
+  "inspiration.analyze": "Analyser",
+  "inspiration.analyzing": "L'IA analyse la photo...",
+  "inspiration.description": "Description",
+  "inspiration.mood": "Ambiance",
+  "inspiration.elements": "Éléments",
+  "inspiration.inspiration": "Inspiration",
+  "inspiration.startWriting": "Commencer à écrire →"
 }

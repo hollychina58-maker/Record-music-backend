@@ -133,6 +133,15 @@ class ApiService {
     await this.client.delete('/story/' + storyId + '/cover');
   }
 
+  async analyzePhoto(imageBase64: string): Promise<{
+    description: string; mood: string; elements: string; inspiration: string;
+  }> {
+    const response = await this.client.post<{ data: { description: string; mood: string; elements: string; inspiration: string } }>(
+      '/photo-inspiration', { image: imageBase64 }, { timeout: 45000 }
+    );
+    return response.data.data;
+  }
+
   async toggleLike(targetType: 'story' | 'comment', targetId: number): Promise<{ liked: boolean; likeCount: number }> {
     const response = await this.client.post<{ liked: boolean; likeCount: number }>('/likes', { targetType, targetId });
     return response.data;

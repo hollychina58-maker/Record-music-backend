@@ -1,4 +1,5 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useLanguage } from '../i18n/LanguageContext';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -19,6 +20,18 @@ export function Layout({ children }: LayoutProps) {
   const isAdmin = user?.role === 'admin';
   const hideNav = location.pathname.startsWith('/admin');
   const isActive = (path: string) => location.pathname === path ? ' nav-link--active' : '';
+  const [showWriteMenu, setShowWriteMenu] = useState(false);
+  const writeMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (writeMenuRef.current && !writeMenuRef.current.contains(e.target as Node)) {
+        setShowWriteMenu(false);
+      }
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -36,7 +49,25 @@ export function Layout({ children }: LayoutProps) {
 
             <div className="nav-links">
               <LanguageSwitcher />
-              <Link to="/create" className={`nav-link${isActive('/create')}`}>{t('nav.write')}</Link>
+              <div className="nav-dropdown" ref={writeMenuRef}>
+                <button
+                  className={`nav-link nav-dropdown-toggle${location.pathname.startsWith('/create') || location.pathname === '/inspiration' ? ' nav-link--active' : ''}`}
+                  onClick={() => setShowWriteMenu(!showWriteMenu)}
+                  aria-expanded={showWriteMenu}
+                >
+                  {t('nav.write')} <span className="nav-dropdown-arrow">▼</span>
+                </button>
+                {showWriteMenu && (
+                  <div className="nav-dropdown-menu">
+                    <Link to="/create" className="nav-dropdown-item" onClick={() => setShowWriteMenu(false)}>
+                      {t('nav.writeDirect')}
+                    </Link>
+                    <Link to="/inspiration" className="nav-dropdown-item" onClick={() => setShowWriteMenu(false)}>
+                      {t('nav.writeInspiration')}
+                    </Link>
+                  </div>
+                )}
+              </div>
               {isAuthenticated ? (
                 <>
                   <Link to="/my-space" className={`nav-link${isActive('/my-space')}`}>{t('nav.mySpace')}</Link>

@@ -7,6 +7,8 @@
   "nav.logout": "로그아웃",
   "nav.login": "로그인",
   "nav.register": "회원가입",
+  "nav.writeDirect": "바로 쓰기",
+  "nav.writeInspiration": "사진 영감",
   "lang.selector": "언어",
   "lang.zh": "中文",
   "lang.en": "English",
@@ -191,5 +193,16 @@
   "burn.warning": "이 작업은 되돌릴 수 없습니다. 이야기는 재가 되고, 존재했다는 증거로 약간의 먹 흔적만 남습니다.",
   "burn.keep": "이 이야기 남기기",
   "burn.confirm": "소각하기",
-  "burn.ignited": "먹이 타올라 먼지와 연기가 되었다"
+  "burn.ignited": "먹이 타올라 먼지와 연기가 되었다",
+  "inspiration.title": "사진 영감",
+  "inspiration.subtitle": "한 장의 사진이 이야기에 불을 붙입니다",
+  "inspiration.upload": "사진 업로드",
+  "inspiration.reupload": "다시 업로드",
+  "inspiration.analyze": "분석하기",
+  "inspiration.analyzing": "AI가 사진을 읽는 중...",
+  "inspiration.description": "설명",
+  "inspiration.mood": "분위기",
+  "inspiration.elements": "요소",
+  "inspiration.inspiration": "영감",
+  "inspiration.startWriting": "글쓰기 시작 →"
 }

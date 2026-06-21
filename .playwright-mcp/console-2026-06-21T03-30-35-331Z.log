@@ -1,0 +1,3 @@
+[      17ms] [ERROR] Failed to load module script: Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of "text/html". Strict MIME type checking is enforced for module scripts per HTML spec. @ https://ustory-umusic.com/assets/index-C_F0RY0W.js:0
+[      21ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://ustory-umusic.com/story/3:0
+[   33025ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://ustory-umusic.com/api/music/3/stream:0
