@@ -88,17 +88,13 @@ export function HomePage() {
 
   return (
     <div className="home-page">
-      <div className="bg-ink">
-        <div className="bg-line" />
-      </div>
-
       <section className="hero">
+        <div className="hero-ink-splash" />
         <div className="hero-text">
           <h1 className="hero-heading">
             <span className="hero-line1">{t('home.hero.line1')}</span>
             <span className="hero-line2">{t('home.hero.line2')}</span>
           </h1>
-          <div className="hero-rule" />
         </div>
         <div className="hero-aside">
           <span className="hero-seal">墨</span>

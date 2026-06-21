@@ -1,35 +1,50 @@
-/* 墨韵 InkRhyme - Premium Editorial Design System */
-/* Chinese ink-wash foundation, refined for premium consumer + editorial */
-/* Palette: ink-blacks on fine-art paper, vermillion seal accents */
+/* 墨韵 InkRhyme - Design System v2 */
+/* Ink meets paper: calligraphy, tea stains, vermillion seals */
+/* Palette avoids AI-template warm-cream trap — every color anchored in the ink-wash world */
 
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600;700&family=ZCOOL+XiaoWei&family=Noto+Naskh+Arabic:wght@400;600&family=Noto+Sans:wght@300;400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600;700&family=ZCOOL+XiaoWei&family=Noto+Naskh+Arabic:wght@400;600&family=Noto+Sans:wght@300;400;600&display=swap');
 
 :root {
-  /* === Ink Palette (near-blacks) === */
-  --ink-deepest: #080808;
-  --ink-deep: #0a0a0a;
-  --ink-black: #1a1a1a;
-  --ink-dark: #2d2d2d;
-  --ink-medium: #4f4f4f;
-  --ink-light: #7a7a7a;
-  --ink-wash: #a8a8a8;
-  --ink-faint: #c4c4c4;
+  /* === Ink Palette === */
+  --ink-deepest: #0F0F0F;
+  --ink-deep: #141414;
+  --ink-black: #1C1C1C;
+  --ink-dark: #2E2E2E;
+  --ink-medium: #555555;
+  --ink-light: #808080;
+  --ink-wash: #B0A8A0;
+  --ink-faint: #C8C0B8;
 
-  /* === Paper Palette (fine-art paper tones) === */
-  --paper-white: #fafaf8;
-  --paper-cream: #f6f4ef;
+  /* === Paper Palette — anchored in Xuan paper (宣纸) reality === */
+  --xuan-paper: #F5F0E8;
+  --paper-white: #FAF8F5;
+  --paper-cream: #F2ECE2;
+  --paper-aged: #EAE3D8;
+  --paper-warm: #F0EAE0;
+  --paper-mist: rgba(242, 236, 226, 0.88);
   --paper-aged: #ebe7df;
   --paper-warm: #f0ece4;
   --paper-mist: rgba(246, 244, 239, 0.88);
 
   /* === Page Background (primary surface) === */
-  --color-page: #f7f5f0;
+  --color-page: var(--xuan-paper);
 
-  /* === Accent: Vermillion Seal Red (印泥色) - refined primary accent === */
-  --seal-red: #b8382a;
-  --seal-red-light: #d44a3a;
-  --seal-red-dark: #8b1f16;
-  --seal-glow: rgba(184, 56, 42, 0.12);
+  /* === Tea-Stain (茶渍) — warm brown for hover / dividers / subtle warmth === */
+  --tea-stain: #8C6E4A;
+  --tea-stain-light: #A88B6C;
+
+  /* === Inkstone (砚台) — deep olive for secondary text / muted states === */
+  --inkstone: #3A3A2A;
+  --inkstone-light: #5A5A4A;
+
+  /* === Worm-Mark (蛀痕) — pale card background / hover states === */
+  --worm-mark: #E8E0D4;
+
+  /* === Accent: Vermillion Seal Red (印泥色) — more saturated, deliberate === */
+  --seal-red: #C23B2A;
+  --seal-red-light: #D9513F;
+  --seal-red-dark: #8B2418;
+  --seal-glow: rgba(194, 59, 42, 0.10);
 
   /* === Accent: Indigo (secondary, for UI elements) === */
   --indigo: #3a4f8b;
@@ -53,7 +68,9 @@
   --color-danger: var(--seal-red);
 
   /* === Typography === */
-  --font-ink: 'Noto Serif SC', 'ZCOOL XiaoWei', 'Songti SC', 'SimSun', serif;
+  --font-ink: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-display: 'Ma Shan Zheng', 'ZCOOL XiaoWei', cursive;
+  --font-seal: 'ZCOOL XiaoWei', serif;
   --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans', sans-serif;
 
   --font-weight-light: 300;
@@ -259,6 +276,50 @@
 @keyframes revealLine {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
+}
+
+/* Signature: ink drop bloom (hero entrance) */
+@keyframes inkDropBloom {
+  0% {
+    clip-path: circle(0% at 50% 50%);
+    opacity: 0;
+  }
+  30% {
+    clip-path: circle(4% at 50% 50%);
+    opacity: 1;
+  }
+  70% {
+    clip-path: circle(70% at 50% 50%);
+    opacity: 1;
+  }
+  100% {
+    clip-path: circle(150% at 50% 50%);
+    opacity: 1;
+  }
+}
+
+/* Scroll-triggered card reveal */
+@keyframes cardReveal {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Ink bleed hover — border blur spread */
+@keyframes inkBleed {
+  0% { box-shadow: 0 0 0 0 rgba(28, 28, 28, 0); }
+  100% { box-shadow: 0 0 0 6px rgba(28, 28, 28, 0.04), 0 8px 32px rgba(28, 28, 28, 0.08); }
+}
+
+/* Tea stain spread (hover) */
+@keyframes stainSpread {
+  from { background-size: 0% 100%; }
+  to { background-size: 100% 100%; }
 }
 
 /* ============================================
