@@ -12,7 +12,11 @@
 /* ===== Page Atmosphere ===== */
 .detail-atmosphere {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100svh; /* small viewport — never changes, prevents iOS resize cascade */
+  height: 100vh;  /* fallback for browsers without svh */
   z-index: 0;
   pointer-events: none;
   background-size: cover;

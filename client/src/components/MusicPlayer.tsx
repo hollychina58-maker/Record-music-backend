@@ -30,13 +30,6 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
     audio.preload = 'auto';
     audioRef.current = audio;
 
-    // iOS Safari: unlock audio context on first user touch
-    const unlock = () => {
-      audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(() => {});
-      document.removeEventListener('touchend', unlock);
-    };
-    document.addEventListener('touchend', unlock, { once: true });
-
     const onLoaded = () => setDuration(audio.duration);
     // Throttle timeupdate via rAF — avoid excessive re-renders on mobile
     let ticking = false;
