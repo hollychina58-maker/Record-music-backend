@@ -1,0 +1,36 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "墨韵" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - combobox "Language" [ref=e8] [cursor=pointer]:
+          - option "中文" [selected]
+          - option "English"
+          - option "日本語"
+          - option "한국어"
+          - option "Français"
+          - option "Deutsch"
+          - option "Русский"
+          - option "العربية"
+        - button "提笔 ▼" [ref=e10] [cursor=pointer]:
+          - text: 提笔
+          - generic [ref=e11]: ▼
+        - link "我的" [ref=e12] [cursor=pointer]:
+          - /url: /my-space
+        - link "充值" [ref=e13] [cursor=pointer]:
+          - /url: /payment
+        - generic [ref=e14]: playwright-test
+        - button "退出" [ref=e15] [cursor=pointer]
+  - generic [ref=e18]:
+    - generic [ref=e19]:
+      - heading "世间千万事 皆可入墨来" [level=1] [ref=e21]:
+        - generic [ref=e22]: 世间千万事
+        - generic [ref=e23]: 皆可入墨来
+      - generic [ref=e25]: 墨
+    - button "只看自己" [ref=e27] [cursor=pointer]
+    - main [ref=e28]
+    - navigation [ref=e30]:
+      - link "创建故事" [ref=e31] [cursor=pointer]:
+        - /url: /create
+        - img [ref=e32]

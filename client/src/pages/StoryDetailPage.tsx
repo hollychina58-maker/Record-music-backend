@@ -98,50 +98,6 @@ export function StoryDetailPage() {
   // Header action menu toggle
   const [showActionMenu, setShowActionMenu] = useState(false);
 
-  // Floating mini-player: desktop-only, rAF-throttled to prevent mobile scroll jank
-  const [showFloatingPlayer, setShowFloatingPlayer] = useState(false);
-  useEffect(() => {
-    if (!music || music.status === 'pending') return;
-    let ticking = false;
-    let prevVisible = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        // Only on wider screens (desktop/tablet) — on mobile it causes scroll jank
-        if (window.innerWidth < 768) {
-          if (prevVisible) { prevVisible = false; setShowFloatingPlayer(false); }
-          ticking = false;
-          return;
-        }
-        const main = document.querySelector('.music-section:not(.music-section--floating)');
-        const visible = main ? main.getBoundingClientRect().bottom < 0 : false;
-        if (visible !== prevVisible) {
-          prevVisible = visible;
-          setShowFloatingPlayer(visible);
-        }
-        ticking = false;
-      });
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [music]);
-
-  // Cover image parallax — image drifts slower than page scroll
-  useEffect(() => {
-    if (!story?.cover_image) return;
-    const img = document.querySelector('.cover-hero-img') as HTMLImageElement | null;
-    if (!img) return;
-    const onScroll = () => {
-      const scrollY = window.scrollY;
-      if (scrollY < window.innerHeight) {
-        img.style.transform = `translateY(${scrollY * 0.15}px)`;
-      }
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [story?.cover_image]);
-
   const removePendingFromStorage = (musicId: number) => {
     try {
       const raw = localStorage.getItem('mo_pending_music');
@@ -423,18 +379,6 @@ export function StoryDetailPage() {
           </div>
         )}
 
-        {/* Floating mini-player — appears when main player scrolled past */}
-        {showFloatingPlayer && music && music.status !== 'pending' && (
-          <div className="music-section music-section--floating">
-            <MusicPlayer
-              audioUrl={`${import.meta.env.VITE_API_URL || ''}/api/music/${music.id}/stream`}
-              title={story.title}
-              style={music.style || undefined}
-              musicId={music.id}
-              canDownload={!!(user && story && user.id === story.user_id)}
-            />
-          </div>
-        )}
       </main>
 
       <CommentSection storyId={story.id} isBurned={story.isBurned} commentLikes={commentLikes} />

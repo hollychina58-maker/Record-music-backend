@@ -459,73 +459,8 @@
   padding: 0;
 }
 
-/* Floating mini-player — appears when scrolled past main player */
-.music-section--floating {
-  position: fixed;
-  bottom: var(--space-4);
-  left: var(--space-4);
-  max-width: 360px;
-  z-index: 40;
-  animation: fadeInUp 0.3s var(--ease-out-expo);
-  background: var(--paper-mist);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(28,28,28,0.06);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-float);
-  padding: var(--space-2) var(--space-3);
-}
 
 /* Compact mode for floating mini player */
-.music-section--floating .ink-player {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-1) 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.music-section--floating .ink-player__info {
-  flex: 0 1 auto;
-  overflow: hidden;
-}
-
-.music-section--floating .ink-player__title {
-  font-size: var(--text-xs);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
-}
-
-.music-section--floating .ink-player__artist {
-  display: none;
-}
-
-.music-section--floating .ink-player__btn--play {
-  width: 32px;
-  height: 32px;
-  font-size: 10px;
-}
-
-.music-section--floating .ink-player__btn--download {
-  display: none;
-}
-
-.music-section--floating .ink-player__progress {
-  flex: 1;
-  min-width: 60px;
-}
-
-.music-section--floating .ink-player__time {
-  font-size: 10px;
-  min-width: 24px;
-}
-
 /* ===== Music Empty State ===== */
 .music-empty {
   max-width: var(--content-narrow);
@@ -575,11 +510,6 @@
   .music-section {
     max-width: none;
     padding: 0 var(--space-4);
-  }
-  .music-section--floating {
-    left: var(--space-2);
-    bottom: var(--space-2);
-    max-width: calc(100vw - var(--space-4));
   }
 }
 

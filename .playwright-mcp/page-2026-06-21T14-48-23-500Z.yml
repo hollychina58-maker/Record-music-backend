@@ -1,0 +1,31 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "墨韵" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e7]:
+        - combobox "Language" [ref=e8] [cursor=pointer]:
+          - option "中文" [selected]
+          - option "English"
+          - option "日本語"
+          - option "한국어"
+          - option "Français"
+          - option "Deutsch"
+          - option "Русский"
+          - option "العربية"
+        - button "提笔 ▼" [ref=e10] [cursor=pointer]:
+          - text: 提笔
+          - generic [ref=e11]: ▼
+        - link "登录" [ref=e12] [cursor=pointer]:
+          - /url: /login
+        - link "注册" [ref=e13] [cursor=pointer]:
+          - /url: /register
+  - generic [ref=e16]:
+    - generic [ref=e17]:
+      - heading "世间千万事皆可入墨来" [level=1] [ref=e19]
+      - generic [ref=e21]: 墨
+    - main [ref=e22]
+    - navigation [ref=e24]:
+      - link "创建故事" [ref=e25] [cursor=pointer]:
+        - /url: /login
+        - img [ref=e26]
