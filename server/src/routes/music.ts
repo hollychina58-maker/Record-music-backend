@@ -102,11 +102,29 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
 
     // Persist generation params so URL can be refreshed later if the CDN link expires
     const generationParams = JSON.stringify({ effectiveText, musicOptions, lyricsMode: lyricsMode || 'ai_generated' });
-    const musicRecord = await dbRun(
-      "INSERT INTO music (story_id, status, style, music_type, generation_params) VALUES (?, 'pending', ?, ?, ?)",
-      [storyId, styleLabel, musicType || 'instrumental', generationParams]
+
+    // Dedup: if story already has a pending or completed music, return it instead of creating a new one
+    const existing = await dbGet<{ id: number; status: string }>(
+      "SELECT id, status FROM music WHERE story_id = ? AND status IN ('pending', 'completed') ORDER BY created_at DESC LIMIT 1",
+      [storyId]
     );
-    const musicId = musicRecord.lastInsertRowid;
+    let musicId: number;
+    if (existing) {
+      musicId = existing.id;
+      // Refund the credit we just deducted — reusing existing music
+      if (isSubscription && subscriptionId) {
+        await dbRun('UPDATE subscriptions SET music_remaining = music_remaining + 1 WHERE id = ?', [subscriptionId]);
+      } else if (!isSubscription) {
+        await dbRun('UPDATE users SET free_music_count = free_music_count + 1 WHERE id = ?', [userId]);
+      }
+      console.log('[Music] Reusing existing music record', musicId, 'status:', existing.status, '— credit refunded');
+    } else {
+      const musicRecord = await dbRun(
+        "INSERT INTO music (story_id, status, style, music_type, generation_params) VALUES (?, 'pending', ?, ?, ?)",
+        [storyId, styleLabel, musicType || 'instrumental', generationParams]
+      );
+      musicId = musicRecord.lastInsertRowid;
+    }
 
     const subscriptionRemaining = subscription
       ? (await dbGet<{ music_remaining: number | null }>('SELECT music_remaining FROM subscriptions WHERE id = ?', [subscriptionId ?? subscription.id]))?.music_remaining
@@ -115,7 +133,10 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
       ? await dbGet<{ free_music_count: number }>('SELECT free_music_count FROM users WHERE id = ?', [userId])
       : null;
 
-    processMusicAsync(userId, storyId, musicId, effectiveText, musicOptions, isSubscription, subscriptionId);
+    // Only trigger async generation for newly created records
+    if (!existing) {
+      processMusicAsync(userId, storyId, musicId, effectiveText, musicOptions, isSubscription, subscriptionId);
+    }
 
     res.status(202).json({
       data: {
@@ -132,10 +153,9 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
 });
 
 router.get('/by-story/:storyId', optionalAuthMiddleware, async (req: AuthRequest, res: Response) => {
-  // Metadata-only — any authenticated user can see a story's music info.
-  // Actual streaming/download is gated in /stream and /download endpoints.
+  // Return only non-failed music records, newest first.
   const records = await dbAll(
-    'SELECT id, story_id, status, style, created_at FROM music WHERE story_id = ? ORDER BY created_at DESC',
+    "SELECT id, story_id, status, style, created_at FROM music WHERE story_id = ? AND status != 'failed' ORDER BY created_at DESC",
     [req.params.storyId]
   );
   res.json({ data: records });
@@ -167,74 +187,107 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   const queryToken = typeof req.query.token === 'string' ? req.query.token : null;
   const rawToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : queryToken;
 
-  if (!rawToken || !secret) { res.status(401).json({ error: 'Authentication required' }); return; }
-  let requestUserId: number;
-  try {
-    const decoded = jwt.verify(rawToken, secret) as { userId: number };
-    requestUserId = decoded.userId;
-  } catch { res.status(401).json({ error: 'Invalid token' }); return; }
+  // Optional auth — guests can stream public story music too
+  let requestUserId: number | null = null;
+  if (rawToken && secret) {
+    try {
+      const decoded = jwt.verify(rawToken, secret) as { userId: number };
+      requestUserId = decoded.userId;
+    } catch { /* invalid token — treat as guest */ }
+  }
 
   try {
     const music = await dbGet<any>('SELECT m.*, m.story_id FROM music m WHERE m.id = ?', [req.params.id]);
     if (!music?.file_path) { res.status(404).json({ error: 'Music not available' }); return; }
 
-    // Public story music: any authenticated user can stream.
-    // Ownership is enforced in /download (only author can download).
+    // Public story music: anyone (including guests) can stream.
     const burned = await dbGet('SELECT id FROM burned_stories WHERE story_id = ?', [music.story_id]);
     if (burned) { res.status(403).json({ error: 'This story has been burned' }); return; }
 
-    if (music.file_path.startsWith('http')) {
+    if (music.file_path.startsWith('http') || music.file_path.startsWith('__regenerating__')) {
       let streamUrl = music.file_path;
 
-      // Probe URL — MiniMax CDN links expire after ~24-48h; refresh silently if stale
-      try {
-        await axios.head(streamUrl, { timeout: 8000 });
-      } catch (probeErr: any) {
-        const status = probeErr?.response?.status;
-        if (status === 403 || status === 404 || status === 410) {
-          // URL expired — regenerate using stored params (no credit deduction)
-          const params = music.generation_params ? JSON.parse(music.generation_params) : null;
-          if (params) {
-            // Optimistic lock: claim regeneration with a sentinel so concurrent
-            // requests don't each generate different music.
-            const claimed = await dbRun(
-              "UPDATE music SET file_path = '__regenerating__' WHERE id = ? AND file_path = ?",
-              [music.id, music.file_path]
-            );
-            if (claimed.changes === 0) {
-              // Another request is already regenerating — wait and read its result
-              await new Promise(r => setTimeout(r, 2000));
-              const refreshed = await dbGet<any>('SELECT file_path FROM music WHERE id = ?', [music.id]);
-              if (refreshed?.file_path && refreshed.file_path !== '__regenerating__') {
-                streamUrl = refreshed.file_path;
-              }
-            } else {
-              try {
-                console.log('[Music] CDN URL expired, regenerating music id:', music.id);
-                const fresh = await generateMusic(params.effectiveText, params.musicOptions as MusicOptions);
-                await dbRun('UPDATE music SET file_path = ? WHERE id = ?', [fresh.audioUrl, music.id]);
-                streamUrl = fresh.audioUrl;
-              } catch (regenErr) {
-                console.error('[Music] Regeneration failed:', regenErr);
-                // Restore old URL so future requests can retry
-                await dbRun('UPDATE music SET file_path = ? WHERE id = ?', [music.file_path, music.id]);
-                res.status(503).json({ error: 'Music URL expired and regeneration failed' });
-                return;
-              }
-            }
-          } else {
-            res.status(410).json({ error: 'Music URL expired and no params to regenerate' });
-            return;
-          }
+      // Handle stuck sentinel — auto-release after 60s
+      if (music.file_path.startsWith('__regenerating__')) {
+        const ts = parseInt(music.file_path.split(':')[1] || '0', 10);
+        if (Date.now() - ts > 60000) {
+          // Sentinel stuck — clear it so this request can regenerate
+          await dbRun('UPDATE music SET file_path = NULL WHERE id = ? AND file_path = ?', [music.id, music.file_path]);
+          res.status(503).json({ error: 'Music is being regenerated, please retry in a moment' });
+          return;
         }
-        // Non-expiry errors (network issues etc.) — still try to stream with original URL
+        // Another request is regenerating — wait briefly
+        await new Promise(r => setTimeout(r, 2000));
+        const refreshed = await dbGet<any>('SELECT file_path FROM music WHERE id = ?', [music.id]);
+        if (refreshed?.file_path && !refreshed.file_path.startsWith('__regenerating__') && refreshed.file_path.startsWith('http')) {
+          streamUrl = refreshed.file_path;
+        } else {
+          res.status(503).json({ error: 'Music is being regenerated, please retry in a moment' });
+          return;
+        }
       }
 
+      // Probe URL — MiniMax CDN links expire after ~24-48h; refresh silently if stale
+      if (streamUrl.startsWith('http')) {
+        try {
+          await axios.head(streamUrl, { timeout: 8000 });
+        } catch (probeErr: any) {
+          const status = probeErr?.response?.status;
+          if (status === 403 || status === 404 || status === 410) {
+            const params = music.generation_params ? JSON.parse(music.generation_params) : null;
+            if (params) {
+              // Optimistic lock with timestamped sentinel — auto-releases after 60s
+              const sentinel = `__regenerating__:${Date.now()}`;
+              const claimed = await dbRun(
+                "UPDATE music SET file_path = ? WHERE id = ? AND file_path = ?",
+                [sentinel, music.id, streamUrl]
+              );
+              if (claimed.changes === 0) {
+                // Another request is already regenerating — wait and read its result
+                await new Promise(r => setTimeout(r, 2000));
+                const refreshed = await dbGet<any>('SELECT file_path FROM music WHERE id = ?', [music.id]);
+                if (refreshed?.file_path && refreshed.file_path.startsWith('http')) {
+                  streamUrl = refreshed.file_path;
+                } else {
+                  res.status(503).json({ error: 'Music is being regenerated, please retry' });
+                  return;
+                }
+              } else {
+                try {
+                  console.log('[Music] CDN URL expired, regenerating music id:', music.id);
+                  const fresh = await generateMusic(params.effectiveText, params.musicOptions as MusicOptions);
+                  await dbRun('UPDATE music SET file_path = ? WHERE id = ?', [fresh.audioUrl, music.id]);
+                  streamUrl = fresh.audioUrl;
+                } catch (regenErr) {
+                  console.error('[Music] Regeneration failed:', regenErr);
+                  await dbRun('UPDATE music SET file_path = ? WHERE id = ?', [streamUrl, music.id]);
+                  res.status(503).json({ error: 'Music URL expired and regeneration failed' });
+                  return;
+                }
+              }
+            } else {
+              res.status(410).json({ error: 'Music URL expired and no params to regenerate' });
+              return;
+            }
+          }
+        }
+      }
+
+      // Stream with Range support — iOS Safari requires partial content responses
+      const range = req.headers.range;
       try {
-        const upstream = await axios.get<NodeJS.ReadableStream>(streamUrl, { responseType: 'stream', timeout: 30000 });
+        const upstream = await axios.get<NodeJS.ReadableStream>(streamUrl, {
+          responseType: 'stream',
+          timeout: 30000,
+          headers: range ? { Range: range } : {},
+        });
+        const upstreamStatus = upstream.status;
         res.setHeader('Content-Type', String(upstream.headers['content-type'] || 'audio/mpeg'));
         res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Accept-Ranges', 'bytes');
         if (upstream.headers['content-length']) res.setHeader('Content-Length', String(upstream.headers['content-length']));
+        if (upstream.headers['content-range']) res.setHeader('Content-Range', String(upstream.headers['content-range']));
+        res.status(upstreamStatus);
         (upstream.data as NodeJS.ReadableStream).pipe(res);
       } catch {
         res.status(502).json({ error: 'Failed to stream audio' });

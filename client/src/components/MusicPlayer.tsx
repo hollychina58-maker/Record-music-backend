@@ -27,7 +27,9 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
       ? `${audioUrl}${audioUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
       : audioUrl;
     const audio = new Audio(urlWithToken);
-    audio.preload = 'auto';
+    // Mobile: preload metadata only to save bandwidth; desktop: full preload
+    const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent);
+    audio.preload = isMobile ? 'metadata' : 'auto';
     audioRef.current = audio;
 
     const onLoaded = () => setDuration(audio.duration || 0);
