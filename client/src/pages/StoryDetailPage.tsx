@@ -82,15 +82,30 @@ export function StoryDetailPage() {
   // Header action menu toggle
   const [showActionMenu, setShowActionMenu] = useState(false);
 
-  // Floating mini-player: show when main player scrolled out of view
+  // Floating mini-player: desktop-only, rAF-throttled to prevent mobile scroll jank
   const [showFloatingPlayer, setShowFloatingPlayer] = useState(false);
   useEffect(() => {
     if (!music || music.status === 'pending') return;
+    let ticking = false;
+    let prevVisible = false;
     const onScroll = () => {
-      const main = document.querySelector('.music-section:not(.music-section--floating)');
-      if (!main) return;
-      const rect = main.getBoundingClientRect();
-      setShowFloatingPlayer(rect.bottom < 0);
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        // Only on wider screens (desktop/tablet) — on mobile it causes scroll jank
+        if (window.innerWidth < 768) {
+          if (prevVisible) { prevVisible = false; setShowFloatingPlayer(false); }
+          ticking = false;
+          return;
+        }
+        const main = document.querySelector('.music-section:not(.music-section--floating)');
+        const visible = main ? main.getBoundingClientRect().bottom < 0 : false;
+        if (visible !== prevVisible) {
+          prevVisible = visible;
+          setShowFloatingPlayer(visible);
+        }
+        ticking = false;
+      });
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
