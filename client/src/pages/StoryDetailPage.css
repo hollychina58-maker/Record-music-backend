@@ -9,6 +9,18 @@
   position: relative;
 }
 
+/* ===== Page Atmosphere ===== */
+.detail-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-size: cover;
+  background-position: center;
+  filter: blur(50px) saturate(0.6);
+  opacity: 0.18;
+}
+
 /* ===== Cover Hero — Immersive full-viewport banner ===== */
 .cover-hero {
   position: relative;
@@ -256,6 +268,8 @@
 
 /* ===== Story Content Area ===== */
 .story-content {
+  position: relative;
+  z-index: 1;
   flex: 1;
   max-width: var(--content-narrow);
   margin: 0 auto;

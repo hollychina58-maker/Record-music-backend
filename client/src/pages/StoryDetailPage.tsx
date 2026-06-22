@@ -26,6 +26,22 @@ export function StoryDetailPage() {
   const user = useAuthStore((s) => s.user);
   const { t } = useLanguage();
   const { addToast } = useToast();
+
+  /** Map story tone to a subtle gradient for the page atmosphere */
+  const toneGradient = (tone: string | null): string => {
+    const map: Record<string, string> = {
+      sorrow:    'linear-gradient(180deg, #e8e2dc 0%, #edeadf 50%, #f2efe8 100%)',
+      joy:       'linear-gradient(180deg, #f2e8d8 0%, #f0ece0 50%, #f5f0e8 100%)',
+      peace:     'linear-gradient(180deg, #e6efe4 0%, #edefe8 50%, #f5f0e8 100%)',
+      nostalgia: 'linear-gradient(180deg, #efe4d6 0%, #f0e8dc 50%, #f5f0e8 100%)',
+      warmth:    'linear-gradient(180deg, #f0e4d8 0%, #f0e8de 50%, #f5f0e8 100%)',
+      loneliness:'linear-gradient(180deg, #e4e6ec 0%, #eaece8 50%, #f5f0e8 100%)',
+      passion:   'linear-gradient(180deg, #eed8d6 0%, #efe4e0 50%, #f5f0e8 100%)',
+      mystery:   'linear-gradient(180deg, #e2e4e8 0%, #e8eae4 50%, #f5f0e8 100%)',
+    };
+    return tone && map[tone] ? map[tone] : map.peace;
+  };
+
   const [story, setStory] = useState<Story | null>(null);
   const [loading, setLoading] = useState(true);
   const [showBurnConfirm, setShowBurnConfirm] = useState(false);
@@ -243,6 +259,15 @@ export function StoryDetailPage() {
 
   return (
     <div className="detail-page">
+      {/* Page atmosphere: cover image blurred or tone-based gradient */}
+      <div
+        className="detail-atmosphere"
+        style={
+          story.cover_image
+            ? { backgroundImage: `url(${story.cover_image})` }
+            : { background: toneGradient(story.tone) }
+        }
+      />
       <header className="page-header">
         <button
           type="button"

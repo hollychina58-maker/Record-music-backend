@@ -341,13 +341,22 @@ export function MySpacePage() {
                   </time>
                   <div className="timeline-card">
                     <Link to={`/story/${s.id}`} className="timeline-card-link">
-                      <h3 className="timeline-card-title">{s.title}</h3>
-                      <p className="timeline-card-excerpt">
-                        {s.content.length > 60 ? s.content.slice(0, 60) + '…' : s.content}
-                      </p>
-                      <div className="timeline-card-meta">
-                        {s.like_count !== undefined && s.like_count > 0 && <span>♥ {s.like_count}</span>}
-                        {s.music_status === 'completed' && <span>♪</span>}
+                      <div className="timeline-card-visual">
+                        {s.cover_image ? (
+                          <img src={s.cover_image} alt="" className="timeline-card-cover" />
+                        ) : (
+                          <StoryPoster title={s.title} content={s.content} index={i} />
+                        )}
+                      </div>
+                      <div className="timeline-card-body">
+                        <h3 className="timeline-card-title">{s.title}</h3>
+                        <p className="timeline-card-excerpt">
+                          {s.content.length > 60 ? s.content.slice(0, 60) + '…' : s.content}
+                        </p>
+                        <div className="timeline-card-meta">
+                          {s.like_count !== undefined && s.like_count > 0 && <span>♥ {s.like_count}</span>}
+                          {s.music_status === 'completed' && <span>♪</span>}
+                        </div>
                       </div>
                     </Link>
                   </div>
