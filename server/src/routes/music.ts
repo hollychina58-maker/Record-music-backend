@@ -178,14 +178,8 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     const music = await dbGet<any>('SELECT m.*, m.story_id FROM music m WHERE m.id = ?', [req.params.id]);
     if (!music?.file_path) { res.status(404).json({ error: 'Music not available' }); return; }
 
-    // Ownership check: only the story's author can stream its music
-    const storyRow = await dbGet<{ user_id: number | null }>(
-      'SELECT user_id FROM stories WHERE id = ?', [music.story_id]
-    );
-    if (!storyRow || storyRow.user_id !== requestUserId) {
-      res.status(403).json({ error: 'Access denied' }); return;
-    }
-
+    // Public story music: any authenticated user can stream.
+    // Ownership is enforced in /download (only author can download).
     const burned = await dbGet('SELECT id FROM burned_stories WHERE story_id = ?', [music.story_id]);
     if (burned) { res.status(403).json({ error: 'This story has been burned' }); return; }
 
