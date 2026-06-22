@@ -40,6 +40,14 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="app-layout">
+      {/* Ambient ink-wash atmosphere — slow drifting blobs */}
+      {!hideNav && (
+        <div className="ink-ambient" aria-hidden="true">
+          <div className="ink-ambient-blob ink-ambient-blob-1" />
+          <div className="ink-ambient-blob ink-ambient-blob-2" />
+          <div className="ink-ambient-blob ink-ambient-blob-3" />
+        </div>
+      )}
       {!hideNav && (
         <nav className="global-nav">
           <div className="global-nav-inner">

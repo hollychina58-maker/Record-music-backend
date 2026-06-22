@@ -332,8 +332,27 @@ export function MySpacePage() {
               <Link to="/create" className="empty-link">{t('nav.write')}</Link>
             </div>
           ) : (
-            <div className="feed-grid myspace-grid">
-              {stories.map((s, i) => <StoryCard key={s.id} story={s} index={i} t={t} />)}
+            <div className="timeline">
+              {stories.map((s, i) => (
+                <div key={s.id} className="timeline-item" style={{ animationDelay: `${0.2 + i * 0.1}s` }}>
+                  <div className="timeline-dot" />
+                  <time className="timeline-date">
+                    {new Date(s.created_at).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+                  </time>
+                  <div className="timeline-card">
+                    <Link to={`/story/${s.id}`} className="timeline-card-link">
+                      <h3 className="timeline-card-title">{s.title}</h3>
+                      <p className="timeline-card-excerpt">
+                        {s.content.length > 60 ? s.content.slice(0, 60) + '…' : s.content}
+                      </p>
+                      <div className="timeline-card-meta">
+                        {s.like_count !== undefined && s.like_count > 0 && <span>♥ {s.like_count}</span>}
+                        {s.music_status === 'completed' && <span>♪</span>}
+                      </div>
+                    </Link>
+                  </div>
+                </div>
+              ))}
             </div>
           )
         )}

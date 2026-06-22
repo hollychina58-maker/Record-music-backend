@@ -574,6 +574,17 @@
     padding: var(--space-6) var(--space-3) var(--space-10);
   }
 
+  /* Ink-settle: paragraphs start light, darken as they enter viewport */
+  .story-body p {
+    color: var(--ink-light);
+    opacity: 0.65;
+    transition: color 0.8s ease, opacity 0.8s ease;
+  }
+  .story-body p.ink-settled {
+    color: var(--ink-black);
+    opacity: 1;
+  }
+
   .story-body {
     margin-top: var(--space-8);
   }
