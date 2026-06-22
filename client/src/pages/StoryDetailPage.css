@@ -398,14 +398,17 @@
 
 .story-body p {
   font-family: var(--font-ink);
-  font-size: var(--text-base);
+  font-size: 1.12rem;
+  font-weight: 500;
   line-height: 2.1;
-  color: var(--ink-dark);
+  color: var(--ink-black);
   margin: 0 0 var(--space-6);
   letter-spacing: 0.015em;
   animation: fadeInUp 0.55s var(--ease-out-expo) forwards;
   opacity: 0;
   max-width: 65ch;
+  /* Subtle text-shadow helps readability against blurred background */
+  text-shadow: 0 0 1px rgba(245,240,232,0.4);
 }
 
 .story-body p:nth-child(1) { animation-delay: 0.2s; }
@@ -421,15 +424,16 @@
   margin-bottom: 0;
 }
 
-/* Drop cap on first paragraph */
-.story-body p:first-child::first-letter {
-  font-size: 3.5em;
+/* Drop cap — Ma Shan Zheng calligraphic first character */
+.story-body p:first-of-type::first-letter {
+  font-family: var(--font-display);
+  font-size: 4em;
+  font-weight: 400;
   float: left;
-  line-height: 0.75;
-  padding-right: 8px;
-  padding-top: 4px;
-  color: var(--ink-deep);
-  font-weight: var(--font-weight-light);
+  line-height: 0.7;
+  margin-right: 0.15em;
+  margin-top: 0.02em;
+  color: var(--ink-black);
 }
 
 /* ===== Reading Progress Line ===== */
