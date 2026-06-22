@@ -79,6 +79,23 @@ export function StoryDetailPage() {
       : {},
   );
 
+  // Header action menu toggle
+  const [showActionMenu, setShowActionMenu] = useState(false);
+
+  // Floating mini-player: show when main player scrolled out of view
+  const [showFloatingPlayer, setShowFloatingPlayer] = useState(false);
+  useEffect(() => {
+    if (!music || music.status === 'pending') return;
+    const onScroll = () => {
+      const main = document.querySelector('.music-section:not(.music-section--floating)');
+      if (!main) return;
+      const rect = main.getBoundingClientRect();
+      setShowFloatingPlayer(rect.bottom < 0);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [music]);
+
   // Cover image parallax — image drifts slower than page scroll
   useEffect(() => {
     if (!story?.cover_image) return;
@@ -223,43 +240,48 @@ export function StoryDetailPage() {
           </svg>
         </button>
         <div className="header-actions">
-          <ShareButton
-            storyId={story.id}
-            storyTitle={story.title}
-            storyTags={story.tags}
-            disabled={story.isBurned}
-          />
-          {!story.isBurned && !story.cover_image && user?.id === story.user_id && (
-            <button
-              type="button"
-              className="gen-cover-btn"
-              onClick={async () => {
-                try {
-                  await apiService.generateCover(story.id);
-                  addToast('info', '🎨 封面图生成中，请稍后刷新页面查看', { duration: 4000 });
-                } catch { /* ignore */ }
-              }}
-              aria-label="生成封面"
-              title="生成 AI 封面图"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="M21 15l-5-5L5 21" />
-              </svg>
-            </button>
-          )}
-          {!story.isBurned && user?.id === story.user_id && (
-            <button
-              type="button"
-              className="burn-btn"
-              onClick={() => setShowBurnConfirm(true)}
-              aria-label={t('burn.confirm')}
-            >
-              <svg viewBox="0 0 24 24" className="burn-icon">
-                <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 3c1.38 0 2.5 1.12 2.5 2.5S13.38 10 12 10s-2.5-1.12-2.5-2.5S10.62 5 12 5z" fill="currentColor" />
-              </svg>
-            </button>
+          <button
+            type="button"
+            className="action-toggle"
+            onClick={() => setShowActionMenu(!showActionMenu)}
+            aria-label="更多操作"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <circle cx="5" cy="12" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="19" cy="12" r="2" />
+            </svg>
+          </button>
+          {showActionMenu && (
+            <div className="action-menu" onClick={() => setShowActionMenu(false)}>
+              <div className="action-menu-inner" onClick={e => e.stopPropagation()}>
+                <ShareButton
+                  storyId={story.id}
+                  storyTitle={story.title}
+                  storyTags={story.tags}
+                  disabled={story.isBurned}
+                />
+                {!story.isBurned && !story.cover_image && user?.id === story.user_id && (
+                  <button className="action-menu-item" onClick={async () => {
+                    setShowActionMenu(false);
+                    try {
+                      await apiService.generateCover(story.id);
+                      addToast('info', '🎨 封面图生成中，请稍后刷新页面查看', { duration: 4000 });
+                    } catch { /* ignore */ }
+                  }}>
+                    🎨 生成封面
+                  </button>
+                )}
+                {!story.isBurned && user?.id === story.user_id && (
+                  <button className="action-menu-item action-menu-item--danger" onClick={() => {
+                    setShowActionMenu(false);
+                    setShowBurnConfirm(true);
+                  }}>
+                    🔥 {t('burn.confirm')}
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </header>
@@ -358,6 +380,19 @@ export function StoryDetailPage() {
         {!music && !loading && user && user.id === story.user_id && (
           <div className="music-empty">
             <p className="music-empty-hint">{t('detail.noMusic')}</p>
+          </div>
+        )}
+
+        {/* Floating mini-player — appears when main player scrolled past */}
+        {showFloatingPlayer && music && music.status !== 'pending' && (
+          <div className="music-section music-section--floating">
+            <MusicPlayer
+              audioUrl={`${import.meta.env.VITE_API_URL || ''}/api/music/${music.id}/stream`}
+              title={story.title}
+              style={music.style || undefined}
+              musicId={music.id}
+              canDownload={!!(user && story && user.id === story.user_id)}
+            />
           </div>
         )}
       </main>

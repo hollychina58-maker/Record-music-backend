@@ -161,6 +161,71 @@
 .detail-page .header-actions {
   display: flex;
   gap: var(--space-2);
+  position: relative;
+}
+
+.action-toggle {
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-medium);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.action-toggle:hover {
+  background: rgba(0,0,0,0.05);
+  color: var(--ink-deep);
+}
+
+.action-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+}
+
+.action-menu-inner {
+  position: absolute;
+  top: calc(var(--nav-height) + var(--space-2));
+  right: var(--space-4);
+  background: var(--paper-white);
+  border: 1px solid rgba(28,28,28,0.08);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  padding: var(--space-2);
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  animation: fadeInScale 0.15s var(--ease-out-expo);
+}
+
+.action-menu-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  font-family: var(--font-ink);
+  font-size: var(--text-sm);
+  color: var(--ink-deep);
+  cursor: pointer;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.action-menu-item:hover {
+  background: var(--paper-aged);
+}
+
+.action-menu-item--danger:hover {
+  background: rgba(194,59,42,0.08);
+  color: var(--seal-red);
 }
 
 .burn-btn {
@@ -364,27 +429,82 @@
   pointer-events: none;
 }
 
-/* ===== Music Section (floating player) ===== */
+/* ===== Music Section (embedded in content flow) ===== */
 .music-section {
-  position: sticky;
-  bottom: 0;
-  background: var(--paper-mist);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-top: 1px solid rgba(15, 15, 15, 0.06);
-  padding: 10px var(--space-6);
-  margin: var(--space-12) calc(-1 * var(--space-6)) 0;
-  width: calc(100% + var(--space-6) * 2);
-  max-width: none;
-  z-index: var(--z-sticky, 20);
+  position: relative;
+  margin: var(--space-8) 0 0 0;
+  max-width: 480px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
 }
 
-/* Left-align the player within the sticky bar */
-.music-section .ink-player {
-  width: auto;
-  max-width: min(100%, 480px);
-  margin-left: 0;
-  margin-right: auto;
+/* Floating mini-player — appears when scrolled past main player */
+.music-section--floating {
+  position: fixed;
+  bottom: var(--space-4);
+  left: var(--space-4);
+  max-width: 360px;
+  z-index: 40;
+  animation: fadeInUp 0.3s var(--ease-out-expo);
+  background: var(--paper-mist);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(28,28,28,0.06);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* Compact mode for floating mini player */
+.music-section--floating .ink-player {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.music-section--floating .ink-player__info {
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+
+.music-section--floating .ink-player__title {
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.music-section--floating .ink-player__artist {
+  display: none;
+}
+
+.music-section--floating .ink-player__btn--play {
+  width: 32px;
+  height: 32px;
+  font-size: 10px;
+}
+
+.music-section--floating .ink-player__btn--download {
+  display: none;
+}
+
+.music-section--floating .ink-player__progress {
+  flex: 1;
+  min-width: 60px;
+}
+
+.music-section--floating .ink-player__time {
+  font-size: 10px;
+  min-width: 24px;
 }
 
 /* ===== Music Empty State ===== */
@@ -434,15 +554,13 @@
   }
 
   .music-section {
-    position: relative; /* kill sticky on mobile — prevents iOS viewport-jump flicker */
-    bottom: auto;
-    padding: 8px var(--space-4);
-    margin: var(--space-10) calc(-1 * var(--space-4)) 0;
-    width: calc(100% + var(--space-4) * 2);
-    /* Disable expensive backdrop-filter on mobile for smooth scrolling */
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    background: var(--paper-cream);
+    max-width: none;
+    padding: 0 var(--space-4);
+  }
+  .music-section--floating {
+    left: var(--space-2);
+    bottom: var(--space-2);
+    max-width: calc(100vw - var(--space-4));
   }
 }
 
