@@ -381,8 +381,9 @@
 
 /* Left-align the player within the sticky bar */
 .music-section .ink-player {
-  max-width: var(--content-narrow);
-  margin: 0;
+  width: auto;
+  max-width: min(100%, 480px);
+  margin-left: 0;
   margin-right: auto;
 }
 
