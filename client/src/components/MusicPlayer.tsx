@@ -19,6 +19,7 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [playError, setPlayError] = useState(false);
 
   useEffect(() => {
     const token = useAuthStore.getState().token;
@@ -26,6 +27,7 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
       ? `${audioUrl}${audioUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
       : audioUrl;
     const audio = new Audio(urlWithToken);
+    audio.preload = 'auto';
     audioRef.current = audio;
 
     const onLoaded = () => setDuration(audio.duration);
@@ -41,9 +43,12 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
       }
     };
     const onEnd = () => setIsPlaying(false);
-    const onError = () => {};
-    const onCanPlay = () => {};
+    const onError = () => { setPlayError(true); setIsPlaying(false); };
+    const onCanPlay = () => { setPlayError(false); };
     const onStalled = () => {};
+
+    // iOS Safari: load() required before play() for dynamically-set src
+    audio.load();
 
     audio.addEventListener('loadedmetadata', onLoaded);
     audio.addEventListener('timeupdate', onTime);
@@ -72,7 +77,12 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
       audio.pause();
       setIsPlaying(false);
     } else {
-      audio.play().then(() => setIsPlaying(true)).catch(() => {});
+      setPlayError(false);
+      // iOS Safari: reload audio before playing dynamically-created sources
+      if (audio.readyState === 0) audio.load();
+      audio.play().then(() => setIsPlaying(true)).catch(() => {
+        setPlayError(true);
+      });
     }
   };
 
@@ -119,6 +129,10 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
           {isPlaying ? '❚❚' : '▶'}
         </button>
       </div>
+
+      {playError && (
+        <p className="ink-player__error">播放失败，请检查网络后重试</p>
+      )}
 
       <div className="ink-player__progress">
         <span className="ink-player__time">{formatTime(currentTime)}</span>
