@@ -24,34 +24,39 @@ interface SubscriptionInfo {
   musicRemaining: number | null;
 }
 
-// ─── Plan feature copy ────────────────────────────────────────────────────────
-const PLAN_FEATURES: Record<string, { icon: string; text: string }[]> = {
+// ─── Plan feature copy — translation key references ─────────────────────────
+const PLAN_FEATURES: Record<string, string[]> = {
   per_use: [
-    { icon: '🎵', text: '每次生成一首专属配乐' },
-    { icon: '⚡', text: '立即到账，无需订阅' },
-    { icon: '🎨', text: 'AI 情感风格匹配' },
-    { icon: '♾️', text: '永久有效，按需使用' },
+    'checkout.feature.per_use.1',
+    'checkout.feature.per_use.2',
+    'checkout.feature.per_use.3',
+    'checkout.feature.per_use.4',
   ],
   monthly: [
-    { icon: '🎵', text: '每月 60 次音乐生成' },
-    { icon: '🔄', text: '30 天持续有效' },
-    { icon: '🎨', text: '全风格解锁：古典、民谣、电子…' },
-    { icon: '⬆️', text: '可随时升级年度会员并抵扣费用' },
+    'checkout.feature.monthly.1',
+    'checkout.feature.monthly.2',
+    'checkout.feature.monthly.3',
+    'checkout.feature.monthly.4',
   ],
   yearly: [
-    { icon: '♾️', text: '365 天无限次音乐生成' },
-    { icon: '🎵', text: '全风格、全情绪解锁' },
-    { icon: '🔒', text: '锁定最优价格，省心一整年' },
-    { icon: '⭐', text: '专属年度会员标识' },
+    'checkout.feature.yearly.1',
+    'checkout.feature.yearly.2',
+    'checkout.feature.yearly.3',
+    'checkout.feature.yearly.4',
   ],
 };
 
+const PLAN_ICONS: Record<string, string> = {
+  per_use: '🎵',
+  monthly: '🔄',
+  yearly: '♾️',
+};
+
 // ─── Payment provider config ──────────────────────────────────────────────────
-// wechat and paypal are UI-only placeholders — not wired to any real payment.
 const PROVIDERS = [
-  { id: 'alipay', label: '支付宝', color: '#1677FF', live: true },
-  { id: 'wechat', label: '微信支付', color: '#07C160', live: false },
-  { id: 'paypal', label: 'PayPal',  color: '#003087', live: false },
+  { id: 'alipay',  color: '#1677FF', live: true },
+  { id: 'wechat',  color: '#07C160', live: false },
+  { id: 'paypal',  color: '#003087', live: false },
 ] as const;
 
 type ProviderId = typeof PROVIDERS[number]['id'];
@@ -60,7 +65,6 @@ function AlipayIcon() {
   return (
     <svg viewBox="0 0 48 48" width="28" height="28" fill="none">
       <rect width="48" height="48" rx="10" fill="#1677FF" />
-      {/* 支付宝官方"A"字标志 */}
       <path
         d="M38.9 30.6c-3.4-1.1-5.6-1.9-7.7-2.7 1.8-2.8 3-6.2 3.3-9.9H27V15h8v-2H27v-3h-3.5v3H15v2h8.5v3h-9.4v2h15.3c-.3 2.7-1.2 5.2-2.6 7.2-3-1-5.9-1.7-7.8-1.7-4.4 0-7.4 2.4-7.4 5.7 0 3.4 3.1 5.4 7.4 5.4 4 0 7.8-2.1 10.2-5.6 3 1.2 6.4 2.7 9.3 4.2l1.4-2.6z"
         fill="white"
@@ -150,7 +154,6 @@ export function CheckoutPage() {
     if (!isAuthenticated) { navigate('/login', { replace: true }); return; }
     if (!productId && !returnOrderId) { navigate('/payment', { replace: true }); return; }
     if (productId) {
-      // Full reset when navigating to a new product
       stopPoll();
       setOrderId(null);
       setStep('review');
@@ -237,7 +240,6 @@ export function CheckoutPage() {
     setProcessing(true);
     setError('');
     try {
-      // Discard any previous pending order so coupon/quantity changes take effect
       setOrderId(null);
       setStep('payment');
     } finally {
@@ -255,7 +257,6 @@ export function CheckoutPage() {
     setError('');
 
     try {
-      // Create a fresh order every time Pay is clicked (ensures coupon / qty consistency)
       let activeOrderId = orderId;
       if (!activeOrderId) {
         let orderRes: any;
@@ -282,17 +283,14 @@ export function CheckoutPage() {
       } catch (err: any) {
         const msg = err?.response?.data?.error || t('checkout.payFail');
         setError(msg);
-        // Allow retry with same orderId
         return;
       }
 
-      // ── Redirect flow (PayPal etc.) ──
       if (payRes.data.redirectUrl) {
         window.location.href = payRes.data.redirectUrl;
         return;
       }
 
-      // ── QR code flow (Alipay / WeChat) ──
       if (payRes.data.qrCode) {
         setQrLoading(true);
         const dataUrl = await QRCode.toDataURL(payRes.data.qrCode, {
@@ -325,7 +323,6 @@ export function CheckoutPage() {
               setTimeout(() => navigate('/my-space'), 1500);
               return;
             }
-            // 202 = activating, retry immediately after 2 s
             if (verifyRes.retryAfter) {
               pollRef.current = setTimeout(pollFn, verifyRes.retryAfter * 1000);
               return;
@@ -344,11 +341,9 @@ export function CheckoutPage() {
               setPollStatusMsg(data?.notFound ? t('checkout.awaitingScan') : t('checkout.polling'));
             }
           }
-          // Backoff: 4s → ramp to 30s max
           const delay = Math.min(4000 + (pollCountRef.current - 1) * 2000, 30000);
           pollRef.current = setTimeout(pollFn, delay);
         };
-        // Start polling immediately
         pollRef.current = setTimeout(pollFn, 0);
         return;
       }
@@ -365,16 +360,13 @@ export function CheckoutPage() {
     if (step === 'review') {
       navigate('/payment');
     } else if (showQr) {
-      // Cancel active QR / polling — go back to provider selection
       stopPoll();
       setPolling(false);
       setShowQr(false);
       setQrDataUrl(null);
-      // Discard the order so a new one is created on next attempt
       setOrderId(null);
     } else {
       stopPoll();
-      // Discard any created order — user may change quantity/coupon
       setOrderId(null);
       setStep('review');
     }
@@ -398,9 +390,22 @@ export function CheckoutPage() {
     return product.priceCents;
   })();
   const totalCents = unitPriceCents * (product.type === 'per_use' ? quantity : 1);
-  const features = PLAN_FEATURES[product.type] || [];
+  const featureKeys = PLAN_FEATURES[product.type] || [];
   const isPerUse = product.type === 'per_use';
   const activeProviderCfg = PROVIDERS.find((p) => p.id === provider)!;
+  const providerLabel = t(`checkout.${provider}`);
+
+  const stepTitle = step === 'review'
+    ? t('checkout.reviewStep')
+    : showQr
+      ? t('checkout.scanStep')
+      : t('checkout.payStep');
+
+  const periodLabel = product.type === 'monthly'
+    ? t('pp.plan.period.monthly')
+    : product.type === 'yearly'
+      ? t('pp.plan.period.yearly')
+      : t('pp.plan.period.per_use');
 
   return (
     <div className="checkout-page">
@@ -411,9 +416,7 @@ export function CheckoutPage() {
             <path d="M19 12H5M12 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.5" />
           </svg>
         </button>
-        <h1 className="page-title">
-          {step === 'review' ? '确认订单' : showQr ? '扫码支付' : '选择支付方式'}
-        </h1>
+        <h1 className="page-title">{stepTitle}</h1>
       </header>
 
       <main className="checkout-content">
@@ -425,8 +428,8 @@ export function CheckoutPage() {
             {/* Plan detail card */}
             <section className="plan-detail-card">
               <div className="plan-detail-header">
-                <div className="plan-badge">{product.name}</div>
-                {isUpgrade && <span className="upgrade-tag">升级优惠</span>}
+                <div className="plan-badge">{t(`pp.plan.name.${product.type}`)}</div>
+                {isUpgrade && <span className="upgrade-tag">{t('pp.badge.upgrade')}</span>}
               </div>
 
               <div className="plan-price-display">
@@ -438,26 +441,24 @@ export function CheckoutPage() {
                 <span className="plan-price-main">
                   {currency.symbol}{currency.formatAmount(currency.toDisplayCents(unitPriceCents))}
                 </span>
-                <span className="plan-price-unit">
-                  {isPerUse ? ' / 次' : product.type === 'monthly' ? ' / 月' : ' / 年'}
-                </span>
+                <span className="plan-price-unit">{periodLabel}</span>
               </div>
 
               <p className="plan-description">{product.description}</p>
 
               <ul className="plan-features">
-                {features.map((f, i) => (
+                {featureKeys.map((fk, i) => (
                   <li key={i} className="plan-feature-item">
-                    <span className="feature-icon">{f.icon}</span>
-                    <span className="feature-text">{f.text}</span>
+                    <span className="feature-icon">{PLAN_ICONS[product.type]}</span>
+                    <span className="feature-text">{t(fk)}</span>
                   </li>
                 ))}
               </ul>
 
               <div className="plan-limit-badge">
                 {product.musicLimit === null
-                  ? <span>♾️ 无限次生成</span>
-                  : <span>🎵 {product.musicLimit} 次音乐生成</span>}
+                  ? <span>{t('checkout.unlimitedGenerations')}</span>
+                  : <span>{t('checkout.generationCount', { count: product.musicLimit })}</span>}
               </div>
             </section>
 
@@ -465,7 +466,7 @@ export function CheckoutPage() {
             {isPerUse && (
               <section className="order-section">
                 <div className="order-row">
-                  <span className="order-label">购买数量</span>
+                  <span className="order-label">{t('checkout.quantity')}</span>
                   <div className="qty-control">
                     <button type="button" className="qty-btn" disabled={quantity <= 1}
                       onClick={() => setQuantity((q) => Math.max(1, q - 1))}>−</button>
@@ -482,7 +483,7 @@ export function CheckoutPage() {
               <input
                 className="coupon-input"
                 type="text"
-                placeholder="优惠码（选填）"
+                placeholder={t('checkout.coupon')}
                 value={couponCode}
                 onChange={(e) => setCouponCode(e.target.value)}
                 maxLength={30}
@@ -491,7 +492,7 @@ export function CheckoutPage() {
 
             {/* Total */}
             <div className="checkout-total-row">
-              <span className="checkout-total-label">应付金额</span>
+              <span className="checkout-total-label">{t('checkout.amountDue')}</span>
               <span className="checkout-total-amount">
                 {currency.symbol}{currency.formatAmount(currency.toDisplayCents(totalCents))}
               </span>
@@ -500,7 +501,7 @@ export function CheckoutPage() {
             {error && <p className="payment-error">{error}</p>}
 
             <button className="checkout-btn" disabled={processing} onClick={handleContinue}>
-              {processing ? t('checkout.processing') : '继续 · 选择支付方式'}
+              {t('checkout.payNow')}
             </button>
 
             <p className="payment-note">{t('checkout.note')}</p>
@@ -512,18 +513,19 @@ export function CheckoutPage() {
           <>
             {/* Order recap */}
             <div className="payment-recap">
-              <div className="payment-recap-name">{product.name}</div>
+              <div className="payment-recap-name">{t(`pp.plan.name.${product.type}`)}</div>
               <div className="payment-recap-amount">
                 {currency.symbol}{currency.formatAmount(currency.toDisplayCents(totalCents))}
               </div>
             </div>
 
             <section className="payment-method">
-              <h3 className="section-title">选择支付方式</h3>
+              <h3 className="section-title">{t('checkout.selectPayment')}</h3>
               <div className="provider-options">
                 {PROVIDERS.map((p) => {
                   const isSelected = provider === p.id;
                   const isDisabled = !p.live;
+                  const pLabel = t(`checkout.${p.id}`);
                   return (
                     <label
                       key={p.id}
@@ -534,7 +536,7 @@ export function CheckoutPage() {
                       ].filter(Boolean).join(' ')}
                       style={isSelected && !isDisabled ? { borderColor: p.color } : {}}
                       onClick={isDisabled ? () => {
-                        setUnavailableToast(`${p.label} 即将上线，敬请期待`);
+                        setUnavailableToast(t('checkout.providerSoon', { provider: pLabel }));
                         setTimeout(() => setUnavailableToast(''), 3000);
                       } : undefined}
                     >
@@ -547,8 +549,8 @@ export function CheckoutPage() {
                         onChange={() => { if (!isDisabled) { setProvider(p.id); setShowQr(false); } }}
                       />
                       <span className="provider-icon">{PROVIDER_ICONS[p.id]}</span>
-                      <span className="provider-name">{p.label}</span>
-                      {isDisabled && <span className="provider-soon">即将上线</span>}
+                      <span className="provider-name">{pLabel}</span>
+                      {isDisabled && <span className="provider-soon">{t('checkout.soon')}</span>}
                       {isSelected && !isDisabled && (
                         <span className="provider-check" style={{ color: p.color }}>✓</span>
                       )}
@@ -576,7 +578,10 @@ export function CheckoutPage() {
                 : <>
                     {PROVIDER_ICONS[provider]}
                     <span style={{ marginLeft: 8 }}>
-                      用 {activeProviderCfg.label} 支付 {currency.symbol}{currency.formatAmount(currency.toDisplayCents(totalCents))}
+                      {t('checkout.payWith', {
+                        provider: providerLabel,
+                        amount: `${currency.symbol}${currency.formatAmount(currency.toDisplayCents(totalCents))}`,
+                      })}
                     </span>
                   </>
               }
@@ -594,16 +599,16 @@ export function CheckoutPage() {
                 <>
                   <div className="qr-provider-badge" style={{ background: activeProviderCfg.color }}>
                     {PROVIDER_ICONS[provider]}
-                    <span>{activeProviderCfg.label}</span>
+                    <span>{providerLabel}</span>
                   </div>
-                  <img src={qrDataUrl} alt={`${activeProviderCfg.label}付款码`} className="qr-image" />
-                  <p className="qr-title">扫码完成支付</p>
+                  <img src={qrDataUrl} alt={t('checkout.scanComplete')} className="qr-image" />
+                  <p className="qr-title">{t('checkout.scanComplete')}</p>
                   <p className="qr-amount">{currency.symbol}{currency.formatAmount(currency.toDisplayCents(totalCents))}</p>
                   {polling && (
                     <p className="qr-hint">{pollStatusMsg || t('checkout.polling')}</p>
                   )}
                   <button className="qr-cancel-btn" onClick={handleBack}>
-                    取消支付
+                    {t('checkout.cancelPay')}
                   </button>
                 </>
               ) : qrLoading ? (
