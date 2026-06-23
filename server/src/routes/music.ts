@@ -301,17 +301,13 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
                   return;
                 }
               } else {
-                try {
-                  console.log('[Music] CDN URL expired, regenerating music id:', music.id);
-                  const fresh = await generateMusic(params.effectiveText, params.musicOptions as MusicOptions);
-                  await dbRun('UPDATE music SET file_path = ? WHERE id = ?', [fresh.audioUrl, music.id]);
-                  streamUrl = fresh.audioUrl;
-                } catch (regenErr) {
-                  console.error('[Music] Regeneration failed:', regenErr);
-                  await dbRun('UPDATE music SET file_path = ? WHERE id = ?', [streamUrl, music.id]);
-                  res.status(503).json({ error: 'Music URL expired and regeneration failed' });
-                  return;
-                }
+                // No generation_params — this music was created before the field existed.
+                // Cannot regenerate. Mark URL as permanently gone so subsequent requests
+                // don't keep re-probing and re-triggering the sentinel.
+                console.warn('[Music] CDN expired, no generation_params for music id:', music.id);
+                await dbRun('UPDATE music SET file_path = NULL WHERE id = ?', [music.id]);
+                res.status(410).json({ error: 'Music URL expired and cannot be regenerated' });
+                return;
               }
             } else {
               res.status(410).json({ error: 'Music URL expired and no params to regenerate' });
