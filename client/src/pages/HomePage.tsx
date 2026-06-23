@@ -26,7 +26,7 @@ function StoryCardSkeleton({ index }: { index: number }) {
 
 function MusicBadge({ status, type, isBurned }: { status: string | null; type: string | null; isBurned?: boolean }) {
   const { t } = useLanguage();
-  if (!status || status === 'failed' || isBurned) return null;
+  if (!status || status === 'failed' || status === 'expired' || isBurned) return null;
   if (status === 'pending') {
     return <span className="music-badge music-badge--pending">♪ {t('home.music.pending')}</span>;
   }

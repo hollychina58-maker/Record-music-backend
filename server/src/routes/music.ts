@@ -201,12 +201,21 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
 });
 
 router.get('/by-story/:storyId', optionalAuthMiddleware, async (req: AuthRequest, res: Response) => {
-  // Return only non-failed music records, newest first.
-  const records = await dbAll(
-    "SELECT id, story_id, status, style, created_at FROM music WHERE story_id = ? AND status != 'failed' ORDER BY created_at DESC",
+  // Return music records with their file_path.
+  // If file_path is NULL (expired CDN URL that couldn't regenerate), mark as 'expired'
+  // so the client can show a "regenerate" prompt instead of a broken player.
+  const records = await dbAll<any>(
+    "SELECT id, story_id, status, style, file_path, created_at FROM music WHERE story_id = ? AND status != 'failed' ORDER BY created_at DESC",
     [req.params.storyId]
   );
-  res.json({ data: records });
+  const data = records.map(r => ({
+    id: r.id,
+    story_id: r.story_id,
+    status: r.status === 'completed' && !r.file_path ? 'expired' : r.status,
+    style: r.style,
+    created_at: r.created_at,
+  }));
+  res.json({ data });
 });
 
 router.get('/status/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -259,8 +268,8 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       if (music.file_path.startsWith('__regenerating__')) {
         const ts = parseInt(music.file_path.split(':')[1] || '0', 10);
         if (Date.now() - ts > 60000) {
-          // Sentinel stuck — clear it so this request can regenerate
-          await dbRun('UPDATE music SET file_path = NULL WHERE id = ? AND file_path = ?', [music.id, music.file_path]);
+          // Sentinel stuck — clear it and mark expired so it won't be picked up again
+          await dbRun('UPDATE music SET file_path = NULL, status = ? WHERE id = ? AND file_path = ?', ['expired', music.id, music.file_path]);
           res.status(503).json({ error: 'Music is being regenerated, please retry in a moment' });
           return;
         }
@@ -305,7 +314,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
                 // Cannot regenerate. Mark URL as permanently gone so subsequent requests
                 // don't keep re-probing and re-triggering the sentinel.
                 console.warn('[Music] CDN expired, no generation_params for music id:', music.id);
-                await dbRun('UPDATE music SET file_path = NULL WHERE id = ?', [music.id]);
+                await dbRun('UPDATE music SET file_path = NULL, status = ? WHERE id = ?', ['expired', music.id]);
                 res.status(410).json({ error: 'Music URL expired and cannot be regenerated' });
                 return;
               }

@@ -14,7 +14,7 @@ import './StoryDetailPage.css';
 
 interface MusicInfo {
   id: number;
-  status: string;
+  status: 'pending' | 'completed' | 'failed' | 'expired';
   file_path: string | null;
   style: string | null;
 }
@@ -168,6 +168,9 @@ export function StoryDetailPage() {
               // Show pending state and start polling
               setMusic(track);
               pollUntilReady(track.id);
+            } else if (track.status === 'expired' || track.status === 'failed') {
+              // Show regenerate prompt — don't poll
+              setMusic(track);
             }
           }
         })
@@ -357,7 +360,7 @@ export function StoryDetailPage() {
             ))}
           </div>
         </article>
-        {music && music.status !== 'pending' && (
+        {music && music.status !== 'pending' && music.status !== 'expired' && (
           <div className="music-section">
             <MusicPlayer
               audioUrl={`${import.meta.env.VITE_API_URL || ''}/api/music/${music.id}/stream`}
@@ -371,6 +374,27 @@ export function StoryDetailPage() {
         {music && music.status === 'pending' && (
           <div className="music-section" style={{ padding: '12px var(--space-6)', textAlign: 'center' }}>
             <p className="music-empty-hint">{t('create.generating')}</p>
+          </div>
+        )}
+        {music && (music.status === 'expired' || music.status === 'failed') && (
+          <div className="music-empty">
+            <p className="music-empty-hint">{music.status === 'failed' ? t('detail.failedMusic') : t('detail.expiredMusic')}</p>
+            {user && story && user.id === story.user_id && (
+              <button
+                className="gen-cover-btn"
+                style={{ marginTop: 'var(--space-3)', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', border: '1px solid var(--seal-red-light)', borderRadius: '20px', background: 'transparent', color: 'var(--seal-red)', cursor: 'pointer', fontSize: 'var(--text-sm)', fontFamily: 'var(--font-ink)' }}
+                onClick={async () => {
+                  try {
+                    const result = await apiService.generateMusic(story.id, story.content, { musicType: 'instrumental' });
+                    addToast('info', '🎵 配乐生成中，请稍后...', { duration: 4000 });
+                    setMusic({ id: result.musicId, status: 'pending', file_path: null, style: null });
+                    pollUntilReady(result.musicId);
+                  } catch { /* */ }
+                }}
+              >
+                🎵 {t('detail.regenerateMusic')}
+              </button>
+            )}
           </div>
         )}
         {!music && !loading && user && user.id === story.user_id && (
