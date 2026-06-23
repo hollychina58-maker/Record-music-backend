@@ -109,27 +109,42 @@ export function StoryDetailPage() {
     } catch { /* ignore */ }
   };
 
+  const POLL_TIMEOUT = 300000; // 5 min — Render deploy restarts kill fire-and-forget processMusicAsync
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const pollUntilReady = (musicId: number) => {
     if (pollRef.current) clearInterval(pollRef.current);
-    // Claim ownership: remove this musicId from the App-level poller so only
-    // this page handles the notification while the user is looking at it.
+    if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
     removePendingFromStorage(musicId);
+    const startTime = Date.now();
 
     pollRef.current = setInterval(async () => {
       try {
         const result = await apiService.pollMusicStatus(musicId);
         if (result.status === 'completed') {
           if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          if (pollTimeoutRef.current) { clearTimeout(pollTimeoutRef.current); pollTimeoutRef.current = null; }
           setMusic({ id: musicId, status: 'completed', file_path: result.filePath, style: null });
           useAuthStore.getState().fetchCurrentUser();
           addToast('success', '🎵 专属配乐已生成，向下滚动即可收听！', { duration: 6000 });
-        } else if (result.status === 'failed') {
+        } else if (result.status === 'failed' || result.status === 'expired') {
           if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-          setMusic(null);
-          addToast('error', '配乐生成失败，请重新尝试');
+          if (pollTimeoutRef.current) { clearTimeout(pollTimeoutRef.current); pollTimeoutRef.current = null; }
+          setMusic({ id: musicId, status: 'failed', file_path: null, style: null });
+          addToast('error', '配乐生成失败，请重新尝试', { duration: 4000 });
+        } else if (Date.now() - startTime > POLL_TIMEOUT) {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          if (pollTimeoutRef.current) { clearTimeout(pollTimeoutRef.current); pollTimeoutRef.current = null; }
+          setMusic({ id: musicId, status: 'failed', file_path: null, style: null });
+          addToast('error', '配乐生成超时，请重新尝试', { duration: 4000 });
         }
       } catch {
-        // Keep polling on network errors
+        // Keep polling on network errors, but respect timeout
+        if (Date.now() - startTime > POLL_TIMEOUT) {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          setMusic({ id: musicId, status: 'failed', file_path: null, style: null });
+          addToast('error', '配乐生成超时，请重新尝试', { duration: 4000 });
+        }
       }
     }, 4000);
   };
@@ -137,6 +152,7 @@ export function StoryDetailPage() {
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
     };
   }, []);
 
@@ -165,9 +181,15 @@ export function StoryDetailPage() {
             if (track.status === 'completed') {
               setMusic(track);
             } else if (track.status === 'pending') {
-              // Show pending state and start polling
-              setMusic(track);
-              pollUntilReady(track.id);
+              // If pending for > 5 min, the async task was lost (e.g. server restart).
+              // Treat as failed so user can retry instead of seeing "Composing..." forever.
+              const pendingMs = Date.now() - new Date((track as any).created_at).getTime();
+              if (pendingMs > POLL_TIMEOUT) {
+                setMusic({ ...track, status: 'failed' as const });
+              } else {
+                setMusic(track);
+                pollUntilReady(track.id);
+              }
             } else if (track.status === 'expired' || track.status === 'failed') {
               // Show regenerate prompt — don't poll
               setMusic(track);
