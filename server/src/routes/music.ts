@@ -22,6 +22,11 @@ async function processMusicAsync(
 ) {
   try {
     const result = await generateMusic(text, musicOptions);
+    // If MiniMax returned no URL (null/empty), keep music in pending — pollUntilReady will keep retrying
+    if (!result.audioUrl) {
+      console.warn('[Music] generateMusic returned empty URL, keeping music pending for music id:', musicId);
+      return;
+    }
     await dbBatch([
       { sql: "UPDATE music SET status = 'completed', file_path = ? WHERE id = ?", args: [result.audioUrl, musicId] },
       { sql: 'INSERT INTO music_usage (user_id, story_id, music_id) VALUES (?, ?, ?)', args: [userId, storyId, musicId] },
