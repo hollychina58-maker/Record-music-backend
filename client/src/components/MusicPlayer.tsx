@@ -19,7 +19,7 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [playError, setPlayError] = useState(false);
+  const [playError, setPlayError] = useState<'expired' | 'network' | false>(false);
 
   useEffect(() => {
     const token = useAuthStore.getState().token;
@@ -46,8 +46,13 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
       }
     };
     const onEnd = () => setIsPlaying(false);
-    const onError = () => { setPlayError(true); setIsPlaying(false); };
-    const onCanPlay = () => { setPlayError(false); };
+    const onError = () => {
+      const err = audio.error;
+      // code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED，通常是 CDN 链接过期（404/403）
+      setPlayError(err?.code === 4 ? 'expired' : 'network');
+      setIsPlaying(false);
+    };
+    const onCanPlay = () => { setPlayError(false as const); };
     const onStalled = () => {};
 
     // iOS Safari: load() required before play() for dynamically-set src
@@ -86,7 +91,7 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
       // iOS Safari: reload audio before playing dynamically-created sources
       if (audio.readyState === 0) audio.load();
       audio.play().then(() => setIsPlaying(true)).catch(() => {
-        setPlayError(true);
+        setPlayError('network');
       });
     }
   };
@@ -135,7 +140,10 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
         </button>
       </div>
 
-      {playError && (
+      {playError === 'expired' && (
+        <p className="ink-player__error">专属配乐已过期，请重新生成</p>
+      )}
+      {playError === 'network' && (
         <p className="ink-player__error">播放失败，请检查网络后重试</p>
       )}
 

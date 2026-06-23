@@ -61,14 +61,16 @@ export function HomePage() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (geo.loading && !onlyMine) {
-      setLoading(true);
-      return;
+    // 不等 geo 加载完成，geo 拿到后再重新请求一次即可（带 countryCode 参数）
+    if (onlyMine) {
+      // "只看我的" 不依赖 geo，直接请求
+    } else if (geo.loading) {
+      // geo 还在加载中：先用无 countryCode 参数请求一次，拿到内容先展示
+      // geo 加载完后 countryCode 变化会再触发一次带参数的请求
     }
     let cancelled = false;
     setLoading(true);
     setLoadError(false);
-    // Safety timeout: force loading off after 8s to prevent blank-page lock
     const safetyTimer = setTimeout(() => {
       if (!cancelled) setLoading(false);
     }, 8000);
@@ -79,7 +81,7 @@ export function HomePage() {
       .catch(() => { if (!cancelled) { clearTimeout(safetyTimer); setLoadError(true); } })
       .finally(() => { if (!cancelled) { clearTimeout(safetyTimer); setLoading(false); } });
     return () => { cancelled = true; clearTimeout(safetyTimer); };
-  }, [geo.loading, geo.countryCode, onlyMine]);
+  }, [geo.countryCode, onlyMine]);
 
   const handleOnlyMineToggle = () => {
     if (!isAuthenticated) return;
