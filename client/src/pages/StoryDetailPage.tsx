@@ -363,9 +363,10 @@ export function StoryDetailPage() {
           )}
           {story.tags && story.tags.length > 0 && (
             <div className="story-tags">
-              {story.tags.map(tag => (
-                <span key={tag} className="story-tag">{t('tag.' + tag) || tag}</span>
-              ))}
+              {story.tags.map(tag => {
+                const displayTag = t('tag.' + tag);
+                return <span key={tag} className="story-tag">{displayTag.startsWith('tag.') ? tag : displayTag}</span>;
+              })}
             </div>
           )}
           <div className="story-actions-row">
