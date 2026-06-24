@@ -4,6 +4,7 @@ import axios from 'axios';
 import { authMiddleware, optionalAuthMiddleware, AuthRequest } from '../middleware/auth.js';
 import { generateMusic, analyzeEmotion, MOOD_LABELS } from '../services/minimax.js';
 import type { MusicOptions } from '../services/minimax.js';
+import { uploadToR2 } from '../services/r2.js';
 import { extractLyrics } from '../services/storyAnalysis.js';
 import { dbGet, dbAll, dbRun, dbBatch } from '../models/database.js';
 import path from 'path';
@@ -22,8 +23,11 @@ async function processMusicAsync(
 ) {
   try {
     const result = await generateMusic(text, musicOptions);
+    // Upload to Cloudflare R2 for permanent CDN storage (MiniMax URL expires in ~24h)
+    const bucketKey = `music/${storyId}/${musicId}_${Date.now()}.mp3`;
+    const permanentUrl = await uploadToR2(result.audioUrl, bucketKey, 'audio/mpeg');
     await dbBatch([
-      { sql: "UPDATE music SET status = 'completed', file_path = ? WHERE id = ?", args: [result.audioUrl, musicId] },
+      { sql: "UPDATE music SET status = 'completed', file_path = ? WHERE id = ?", args: [permanentUrl, musicId] },
       { sql: 'INSERT INTO music_usage (user_id, story_id, music_id) VALUES (?, ?, ?)', args: [userId, storyId, musicId] },
     ]);
   } catch (err) {

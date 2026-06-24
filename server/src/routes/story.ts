@@ -4,6 +4,7 @@ import { authMiddleware, optionalAuthMiddleware, AuthRequest } from '../middlewa
 import { detectLanguage } from '../services/language.js';
 import { lookupGeo } from '../services/geoip.js';
 import { generateCoverImage, buildCoverPrompt } from '../services/minimax.js';
+import { uploadToR2 } from '../services/r2.js';
 import { analyzeStory } from '../services/storyAnalysis.js';
 
 const router = Router();
@@ -136,7 +137,10 @@ async function processCoverAsync(storyId: number, text: string, tone: string | n
     await dbRun('UPDATE stories SET cover_prompt = ? WHERE id = ?', [prompt, storyId]);
 
     const result = await generateCoverImage(prompt);
-    await dbRun('UPDATE stories SET cover_image = ? WHERE id = ?', [result.imageUrl, storyId]);
+    // Upload to R2 for permanent storage (MiniMax image URL expires)
+    const bucketKey = `covers/${storyId}_${Date.now()}.png`;
+    const permanentUrl = await uploadToR2(result.imageUrl, bucketKey, 'image/png');
+    await dbRun('UPDATE stories SET cover_image = ? WHERE id = ?', [permanentUrl, storyId]);
     console.log('[Cover] Image generated for story', storyId);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown';
