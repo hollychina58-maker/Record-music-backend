@@ -27,11 +27,9 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) 
   if (onlyMine && req.userId) {
     conditions.push('s.user_id = ?');
     params.push(req.userId);
-  } else {
-    // Filter by country only — language detection from franc is unreliable for short texts
-    // and causes too many stories to be excluded. countryCode alone is sufficient for regional feed.
-    if (countryCode) { conditions.push('(s.country_code = ? OR s.country_code IS NULL)'); params.push(countryCode); }
   }
+  // Note: countryCode filtering removed — on a small platform it hides too many stories.
+  // Revisit when there are 1000+ stories per region.
 
   const where = conditions.join(' AND ');
 
