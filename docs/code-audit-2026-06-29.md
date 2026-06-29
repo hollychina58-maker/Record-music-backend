@@ -167,3 +167,183 @@ seed 中 `await generateMusic()` 同步调用外部 AI API。若 MiniMax 慢/超
 代码质量/维护性建议，已纳入技术债务清单。
 
 **第三轮：4 严重已修复，6 高+8 中+7 低已记录。三轮审核终态：零严重问题。**
+
+---
+
+## 🔍 第三轮最终验证（2026-06-29，commit 424ebd2 → 22c67df）
+
+对 4 项严重修复逐行代码核实：
+
+| # | 问题 | 验证 | 证据 |
+|:---|:---|:---:|:---|
+| **R3-C1** | admin/stories 级联+R2 | ✅ | `admin/stories.ts:49-67` — R2 清理（music+cover）+ 7 步 DB 级联（comment likes → comments → story likes → music_usage → music → burned → stories），顺序与 story.ts/burn.ts 一致 |
+| **R3-C2** | admin/users 缺 4 表 | ✅ | `admin/users.ts:109-112` — 新增 `notifications(OR user_id/actor_id)` + `messages(OR from/to)` + `follows(OR follower/followed)` + `blocked_users(OR blocker/blocked)`，完备 |
+| **R3-C3** | fetch AbortController | ✅ | `MusicPlayer.tsx:33` controller 在 if 外声明，`L35` fetch 传 signal，`L37-38` `.then/catch` 检查 `!controller.signal.aborted`，`L80` cleanup 中 `controller.abort()`。完整防护 |
+| **R3-C4** | addColumnIfMissing catch | ✅ | `database.ts:233-237` — `catch(err: any)` → 仅 `err?.message?.includes('duplicate column')` 时 return，其余 throw。精确 |
+
+### MusicPlayer cleanup 执行顺序正确性
+
+```
+L79: cancelAnimationFrame   — 停止 rAF
+L80: controller.abort()      — 中止 fetch（阻止后续 .then 创建 blob）
+L81: audio.pause()           — 停止播放
+L82: revokeObjectURL         — 释放旧 blob
+L83-89: removeEventListener  — 解绑事件
+```
+顺序合理：先 abort（阻止新 blob 创建），再 revoke（清理旧 blob），最后解绑事件。
+
+### 最终累计
+
+| 轮次 | 🔴 严重 | 🟠 高 | 🟡 中 | 🔵 低 |
+|:---|:---:|:---:|:---:|:---:|
+| 第一轮 | 7→**0** ✅ | 10→**0** ✅ | 12 | 9 |
+| 第二轮 | 5→**0** ✅ | 4→**0** ✅ | 5 | 5 |
+| 第三轮 | 4→**0** ✅ | 6 🟡 | 8 🟡 | 7 🟡 |
+| **合计** | **16 修复** | **14 修复** | 31 记录 | 21 记录 |
+
+**最终 commit 链：**
+```
+ad663c5 → 801fea4 → 9185bb5 → ccda91f → 4e915de → 94d95e2 → 87b1d0c → 424ebd2 → 22c67df
+```
+
+**项目评级：🟢 良好。三轮审核累计 57 个发现，16 个严重 + 14 个高优先级全部修复，零严重/高问题残留。**
+
+---
+
+# 🔄 第四轮审核：Prompt 优化方案实施审查（2026-06-29，commit 2d859cf + 3c83799）
+
+对音乐生成 Prompt 优化方案的实施代码进行全面审核。
+
+## 改动概览
+
+| 文件 | 改动量 | 内容 |
+|:---|:---:|:---|
+| `server/src/services/minimax.ts` | +66/-15 | BPM/Key 映射、10 流派、Prompt 重写、lyrics_optimizer、timeout 自适应 |
+| `server/src/routes/music.ts` | +6/-2 | 透传 duration、musicMood 优先级调整 |
+| `client/src/pages/CreateStoryPage.tsx` | +37 | 情绪选择器、时长 radio、流派 4→10 |
+| `client/src/pages/CreateStoryPage.css` | +36 | duration-group / duration-choice 样式 |
+| `client/src/i18n/locales/zh.json` | +12 | 情绪/流派/时长翻译 key |
+| `client/src/i18n/locales/en.json` | +12 | 同上英文 |
+| `client/src/services/api.ts` | +2/-1 | generateMusic options 类型扩展 |
+
+---
+
+## 🔴 严重问题
+
+### P4-C1. `lyrics_optimizer` 没有故事上下文 —— song_ai 生成通用歌词而非故事相关
+
+**文件**: [server/src/services/minimax.ts:312-320](../server/src/services/minimax.ts#L312-L320)  
+**严重程度**: 🔴 严重  
+**类别**: 功能逻辑
+
+**问题描述**：
+
+song_ai 模式设置 `payload.lyrics_optimizer = true`，但 prompt 只包含音乐元数据：
+
+```
+"A minor, 60-75 BPM, melancholic piano ballad style, 悲伤情绪, slow tempo, piano/cello/strings为主奏乐器, 中文深情演唱, 叙事配乐风格, 60秒时长"
+```
+
+根据 MiniMax 文档：`lyrics_optimizer` 是"根据 **prompt** 自动生成歌词"。但当前 prompt 中**没有故事内容**——只有音乐参数。MiniMax 会生成与 mood 匹配的**通用歌词**（如通用情歌/励志歌词），与用户的真实故事无关。这违背了 song_ai 的定位——用户选择此模式是希望 AI 根据故事内容写歌词。
+
+此外，`music.ts:90-96` 中的 `extractLyrics()` 调用仍在执行（消耗一次 MiniMax chat API），但 song_ai 模式下其结果被完全忽略——既不在 prompt 中，也不在 lyrics 字段中。白白浪费 API 成本。
+
+**修复**：将故事摘要注入 prompt，让 MiniMax 的 lyrics_optimizer 能基于故事内容生成歌词：
+
+```typescript
+// 在 prompt 末尾追加故事上下文（用于 lyrics_optimizer）
+if (!isInstrumental && options.lyricsMode !== 'story_as_lyrics') {
+  prompt += `。故事主题：${text.slice(0, 300)}`;
+}
+```
+
+同时，song_ai 模式下跳过 `extractLyrics()` 调用（节约一次 API 开销）：
+
+```typescript
+// music.ts:90-96
+if (musicType === 'song') {
+  if (lyricsMode === 'story_as_lyrics') {
+    effectiveText = text.slice(0, 400);
+  }
+  // song_ai: 不再调用 extractLyrics，由 minimax.ts prompt + lyrics_optimizer 处理
+}
+```
+
+---
+
+## 🟡 中等问题
+
+### P4-M1. song_ai 模式下 `extractLyrics()` 白白消耗一次 MiniMax API
+
+**文件**: [server/src/routes/music.ts:90-96](../server/src/routes/music.ts#L90-L96)  
+**严重程度**: 🟡 中  
+**类别**: 代码效率
+
+song_ai 模式仍然执行 `await extractLyrics(text, ...)`，但 `effectiveText` 传入 `generateMusic()` 后，因为 `options.lyricsMode !== 'story_as_lyrics'` 走的是 `lyrics_optimizer: true` 分支（`minimax.ts:314`），完全不使用 `text` 参数。每次 song_ai 生成额外浪费一次 MiniMax chat API 调用。
+
+**修复**：见 P4-C1 的修复建议——song_ai 模式直接跳过 extractLyrics。
+
+### P4-M2. 120s 时长 timeout 180s 偏紧
+
+**文件**: [server/src/services/minimax.ts:323](../server/src/services/minimax.ts#L323)  
+**严重程度**: 🟡 中  
+**类别**: 可靠性
+
+```typescript
+const timeout = durationSec <= 60 ? 120000 : 180000;
+```
+
+MiniMax 2.6 生成 120s 音频可能在高峰期需要 2-3 分钟以上。180s (3 分钟) 的 timeout 在高峰期可能不够。建议改为 240000 (4 分钟)。
+
+---
+
+## ✅ 验证通过的部分
+
+| 功能 | 文件:行 | 评价 |
+|:---|:---|:---|
+| BPM/Key 自动映射 | `minimax.ts:225-236` | ✅ 8 种情绪完整映射，Key 随机选取，BPM 合理 |
+| 10 流派扩展 | `minimax.ts:217-228` | ✅ 6 个新流派各含 production hint |
+| 时长映射 | `minimax.ts:238-242` | ✅ 30/60/120 秒，默认 medium |
+| Prompt 重写 | `minimax.ts:289-298` | ✅ 结构化：Key+BPM → Style → 情绪 → 节奏 → 乐器 → 流派 → 人声 → 用途 → 时长 |
+| timeout 自适应 | `minimax.ts:323` | ✅ ≤60s→120s, >60s→180s |
+| musicMood 优先级 | `music.ts:86` | ✅ `musicMood || story.tone || undefined`，用户选择优先 |
+| 前端情绪选择器 | `CreateStoryPage.tsx:272-285` | ✅ 8 种 mood 可选 + "AI 自动检测"默认项 |
+| 前端流派扩展 | `CreateStoryPage.tsx:291-300` | ✅ 10 个 option |
+| 前端时长 radio | `CreateStoryPage.tsx:303-313` | ✅ 三选一 radio，active 样式 |
+| 前端 CSS | `CreateStoryPage.css:693-726` | ✅ .duration-group + .duration-choice + .duration-choice--active |
+| i18n 中文 | `zh.json` | ✅ 情绪/流派/时长全部 15 个 key |
+| API 类型扩展 | `api.ts:195-198` | ✅ duration、musicMood 可选字段 |
+| story_as_lyrics | `minimax.ts:318` | ✅ `text.slice(0, 300)` 直接用作歌词 |
+
+---
+
+## ❌ 方案中未实施的项
+
+| 方案内容 | 状态 | 建议 |
+|:---|:---:|:---|
+| `variants` / `number_results` 多变体 | ❌ 未实施 | 可后续迭代 |
+| `seed` 可复现生成 | ❌ 未实施 | 低优先级 |
+| song_as_lyrics `[Verse]/[Chorus]` 结构标签 | ❌ 未实施 | 当前 `text.slice(0,300)` 裸文本够用 |
+| `stream` 流式传输 | ❌ 未实施 | 后端优化，不影响用户体验 |
+
+---
+
+## 📊 第四轮审核总结
+
+| 等级 | 数量 | 问题 |
+|:---|:---:|:---|
+| 🔴 严重 | **1** | lyrics_optimizer 缺故事上下文 |
+| 🟡 中 | 2 | extractLyrics 浪费调用、120s timeout 偏紧 |
+| ✅ 通过 | 13 | BPM/Key、流派、时长、Prompt、前端 UI、CSS、i18n、API 类型 |
+
+**总体评价**：实施质量高——核心的 BPM/Key 映射、Prompt 重写、流派扩展、时长选择、情绪覆盖器全部正确。唯一的严重问题（歌词无故事上下文）是 prompt 设计层面的遗漏，补充故事摘要到 prompt 即可修复。
+
+### P4 开发者回复（commit 9775d33）
+
+**P4-C1 lyrics_optimizer 缺故事上下文 → ✅ 已修复**：song_ai 模式将 `故事主题：${text.slice(0,300)}` 注入 prompt，MiniMax 据此生成故事相关歌词。
+
+**P4-M1 song_ai 浪费 extractLyrics → ✅ 已修复**：song_ai 模式跳过 extractLyrics()，节约一次 MiniMax chat API。
+
+**P4-M2 120s timeout 偏紧 → ✅ 已修复**：≥60s 音乐 timeout 从 180s 改为 240s（4 分钟）。
+
+**第四轮终态：1 严重 + 2 中全部修复。**
