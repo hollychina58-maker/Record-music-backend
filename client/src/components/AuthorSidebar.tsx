@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useAuthStore } from '../stores/authStore';
 import { apiService } from '../services/api';
 import './AuthorSidebar.css';
 
@@ -21,8 +22,11 @@ interface AuthorStory {
 
 export function AuthorSidebar({ authorId, authorNickname, excludeStoryId }: { authorId: number; authorNickname: string; excludeStoryId?: number }) {
   const { t } = useLanguage();
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   const [author, setAuthor] = useState<AuthorInfo | null>(null);
   const [stories, setStories] = useState<AuthorStory[]>([]);
+  const [following, setFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     if (!authorId) return;
@@ -32,7 +36,21 @@ export function AuthorSidebar({ authorId, authorNickname, excludeStoryId }: { au
     apiService.clientGet('/users/' + authorId + '/stories?limit=4')
       .then(d => setStories((d.data as AuthorStory[]).filter(s => s.title && s.id !== excludeStoryId).slice(0, 3)))
       .catch(() => {});
-  }, [authorId]);
+    if (isAuthenticated) {
+      apiService.clientGet('/users/' + authorId + '/is-following')
+        .then((d: any) => setFollowing(d.following ?? false))
+        .catch(() => {});
+    }
+  }, [authorId, isAuthenticated]);
+
+  const handleFollow = async () => {
+    setFollowLoading(true);
+    try {
+      const d: any = await apiService.clientPost('/users/' + authorId + '/follow');
+      setFollowing(d.following ?? false);
+    } catch { /* ignore */ }
+    finally { setFollowLoading(false); }
+  };
 
   if (!author) return null;
 
@@ -52,10 +70,11 @@ export function AuthorSidebar({ authorId, authorNickname, excludeStoryId }: { au
           <span>{t('author.storyCount', { count: author.story_count })}</span>
         </div>
         <div className="author-actions">
-          {/* Follow button — functional in Phase B */}
-          <button className="sidebar-btn sidebar-btn--follow" disabled title={t('follow.comingSoon')}>
-            {t('follow.follow')}
-          </button>
+          {isAuthenticated && useAuthStore.getState().user?.id !== authorId && (
+            <button className="sidebar-btn sidebar-btn--follow" onClick={handleFollow} disabled={followLoading}>
+              {following ? t('follow.following') : t('follow.follow')}
+            </button>
+          )}
           {/* Message button — functional in Phase C */}
           <button className="sidebar-btn sidebar-btn--msg" disabled title={t('msg.comingSoon')}>
             ✉

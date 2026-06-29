@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useAuthStore } from '../stores/authStore';
 import { apiService } from '../services/api';
 import './UserProfilePage.css';
 
@@ -28,9 +29,13 @@ export function UserProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const currentUser = useAuthStore(s => s.user);
   const [author, setAuthor] = useState<AuthorInfo | null>(null);
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
+  const [following, setFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const isOwn = currentUser?.id === parseInt(id || '0');
 
   useEffect(() => {
     if (!id) return;
@@ -39,10 +44,12 @@ export function UserProfilePage() {
     Promise.all([
       apiService.clientGet('/users/' + uid + '/profile'),
       apiService.clientGet('/users/' + uid + '/stories?limit=50'),
+      currentUser ? apiService.clientGet('/users/' + uid + '/is-following').catch(() => ({ following: false })) : Promise.resolve({ following: false }),
     ])
-      .then(([profileRes, storiesRes]) => {
+      .then(([profileRes, storiesRes, followRes]) => {
         setAuthor(profileRes.data as AuthorInfo);
         setStories(storiesRes.data as Story[]);
+        setFollowing((followRes as any).following ?? false);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -89,9 +96,18 @@ export function UserProfilePage() {
           <div className="user-stats">
             <span>{t('author.storyCount', { count: author.story_count })}</span>
           </div>
-          <button className="user-follow-btn" disabled title={t('follow.comingSoon')}>
-            {t('follow.follow')}
-          </button>
+          {!isOwn && (
+            <button className="user-follow-btn" disabled={followLoading} onClick={async () => {
+              setFollowLoading(true);
+              try {
+                const d: any = await apiService.clientPost('/users/' + id + '/follow');
+                setFollowing(d.following ?? false);
+              } catch { /* ignore */ }
+              finally { setFollowLoading(false); }
+            }}>
+              {following ? t('follow.following') : t('follow.follow')}
+            </button>
+          )}
         </section>
 
         {/* Stories */}
