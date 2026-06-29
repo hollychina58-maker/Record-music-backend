@@ -188,7 +188,8 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
 
     // Only trigger async generation for newly created records
     if (!existing) {
-      processMusicAsync(userId, storyId, musicId, effectiveText, musicOptions, isSubscription, subscriptionId);
+      processMusicAsync(userId, storyId, musicId, effectiveText, musicOptions, isSubscription, subscriptionId)
+        .catch(err => console.error('[Music] Unhandled error in processMusicAsync:', err));
     }
 
     res.status(202).json({

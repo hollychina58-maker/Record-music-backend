@@ -299,6 +299,7 @@ export async function initDatabase(): Promise<void> {
     ], 'write');
   }
 
+  await client.execute('PRAGMA foreign_keys = ON;');
   console.log('[DB] Database initialized');
 }
 
