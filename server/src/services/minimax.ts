@@ -321,6 +321,9 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
     }
   }
 
+  // Re-assign prompt — must be AFTER lyrics_optimizer block (string is immutable, += creates new string)
+  payload.prompt = prompt;
+
   // Longer timeout for longer music (120s may need 3-4 min during peak)
   const timeout = durationSec <= 60 ? 120000 : 240000;
 
