@@ -487,91 +487,251 @@ CREATE INDEX IF NOT EXISTS idx_likes_target ON likes(target_type, target_id);
 
 ---
 
-## 📝 开发者逐条核验回复（2026-06-29）
+## 📝 开发者逐条核验回复 + AI 反批驳（2026-06-29）
 
-### C1. 音乐生成双重扣费 → ❌ 不存在（已修复）
+---
 
-当前代码（`music.ts:112-192`）已在 6 月 23 日重构：**先查 existing，再决定扣积分，扣后二次 recheck**。流程：
-1. 先查 `existing`（第112行）→ 找到则不扣积分，直接复用
-2. 未找到才扣积分（第122行）→ 扣后二次 recheck（第147行）
-3. recheck 命中则退款返回已有记录
+### C1. 音乐生成双重扣费
 
-不存在"双重扣费"路径。审核文档分析的是旧版代码（先扣后查），新版已修复。
+**开发者批驳**: ❌ 不存在（已修复）。声称"先查 existing，再决定扣积分"。
 
-### C2. expired 状态未在 schema 中定义 → 🟡 已接受，低优先级
+**AI 反批驳**: 🔴 **批驳不成立。代码事实与描述相反，问题比原审核更严重。**
 
-`expired` 是业务逻辑中的合法状态，server 端完全控制写入。添加 CHECK 约束是锦上添花但非紧急。当前通过 `by-story` 映射层（`completed + null file_path → expired`）和 stream 端点写入两处统一管理，不会出现脏数据。
+实际代码执行顺序（[music.ts:64-192](../server/src/routes/music.ts#L64-L192)）：
 
-### C3. MiniMax 无超时 → ✅ 已修复（commit ad663c5）
+```
+第 64-86 行:  ★ 第一次扣积分（subscription 或 free_music_count）
+第 112 行:    查 existing
+第 118 行:    if (existing) → 打印 "no credit deducted" → 但 ★ 没有退款！
+第 122-144 行: else → ★ 第二次扣积分
+第 147 行:    recheck
+第 174-179 行: existing 存在时跳过 INSERT
+第 191 行:    existing 存在时跳过异步生成
+```
 
-已添加 `timeout: 120000`（2 分钟）。
+**关键事实**：
+1. 第 64-86 行的扣积分在**任何逻辑分支之前**就执行了——不是"先查后扣"
+2. 第 119 行注释 `"no credit deducted"` 是**错误的**——积分已在第 64-86 行扣除
+3. 当 `existing` 命中时（用户刷新页面、重复请求等），代码仅跳过第二次扣费（122-144），但**第一次扣费（64-86）永不退款**，用户白白损失积分
 
-### C4. PRAGMA foreign_keys 未启用 → ✅ 已修复（commit ad663c5）
+**实例**：用户 A 为故事 X 生成音乐 → 成功。用户 A 刷新 StoryDetailPage → 前端再次调用 `/music/generate` → 第 64-86 行扣积分 → 第 112 行查到 existing → "no credit deducted"（但已扣！）→ 返回已有记录。**每次刷新损失 1 积分。**
 
-已在 `initDatabase()` 末尾添加 `PRAGMA foreign_keys = ON;`。
+**结论**：此问题不仅存在，且严重程度需从"并发竞争"上调为**"每次复用已有记录必扣积分"**。这不是并发 race condition，而是**确定性的逻辑 bug**——100% 可复现。
 
-### C5. 故事删除无级联清理 → 🟡 已知，低优先级
+**修复方向**：将第 64-86 行的第一次扣费移到第 118 行的 `else` 分支内（与第二次扣费合并），确保仅在确实需要创建新记录时才扣积分。
 
-普通用户**没有删除故事入口**。用户面只有燃烧（burn）操作，燃烧有完整清理逻辑（comments、music_usage、music、likes 全部处理）。管理员删除已在 `admin/stories.ts` 中正确处理。`story.ts` 的 DELETE 端点仅供管理员内部使用，由管理员路由覆盖。
+---
 
-### C6. setImmediate 通知丢失 → 🟡 已接受，暂不修复
+### C2. expired 状态未在 schema 中定义
 
-当前用户规模下风险极低（关注者 < 100）。`setImmediate` 在 Node.js 事件循环中优先级高，服务器崩溃的概率远低于通知丢失成为实际问题的概率。待用户量 > 1000 后再引入消息队列。
+**开发者批驳**: 🟡 已接受，低优先级。
 
-### C7. 动态表名拼接 → 🟡 低风险
+**AI 反批驳**: ✅ **批驳合理。** 降级为低优先级可接受。但建议至少写一条注释标注 `expired` 是合法值，避免未来开发者困惑。
 
-已通过 `if (!['story', 'comment'].includes(targetType))` 白名单校验。表名仅两个可能值，不存在注入路径。TABLE_MAP 方案更优雅但无安全增益。
+---
 
-### H1. 错误消息泄露 → 🟡 部分接受
+### C3. MiniMax 无超时
 
-5 处中有 3 处是 `res.status(500).json({ error: 'Internal server error' })` 通用消息，不泄露细节。`photo-inspiration` 端点和 music generate 的 catch 已返回固定文案。无需修改。
+**开发者批驳**: ✅ 已修复（commit ad663c5）。
 
-### H2. XSS 防护 → ✅ 不存在
+**AI 反批驳**: ✅ **批驳正确。** 实测 [minimax.ts:289](../server/src/services/minimax.ts#L289) 已添加 `timeout: 120000`。已修复。
 
-React JSX 默认转义所有插值。前端渲染使用 `{story.title}` 而非 `dangerouslySetInnerHTML`。API 消费者均为自有前端。无 XSS 攻击面。
+---
 
-### H3. 列表缺少分页 → 🟡 已有限制
+### C4. PRAGMA foreign_keys 未启用
 
-- `GET /users/me/stories` — 单用户最多几十篇，无需分页
-- `GET /users/me/liked-stories` — 同上
-- `GET /api/likes/story/:id` — 评论通常 < 100 条
-- `GET /users/:id/following` — 已有 users JOIN + ORDER BY 限制
-- `GET /api/notifications` — 已有 `LIMIT 30`，且通知会定期清理
+**开发者批驳**: ✅ 已修复（commit ad663c5）。
 
-当前数据量下无性能风险。
+**AI 反批驳**: ✅ **批驳正确。** 实测 [database.ts:302](../server/src/models/database.ts#L302) 已添加 `PRAGMA foreign_keys = ON;`。已修复。
 
-### H4. helmet 安全头 → 🟡 已知
+---
 
-Vercel/Render 边缘层已添加部分安全头。`helmet` 可加但不紧急。
+### C5. 故事删除无级联清理
 
-### H5. CORS 宽松 → 🟡 已接受
+**开发者批驳**: 🟡 已知，低优先级。称"普通用户没有删除故事入口"，"story.ts 的 DELETE 端点仅供管理员内部使用"。
 
-`*.vercel.app` 通配符支持预览部署。他人 Vercel 部署需要有效的 JWT token 才能访问需认证的端点。公开端点（story 列表、详情）本就对外开放。
+**AI 反批驳**: 🟠 **批驳不成立——存在事实错误。**
 
-### H6. 流无空闲超时 → 🟡 已接受
+实测代码（[story.ts:143-150](../server/src/routes/story.ts#L143-L150)）：
 
-R2 CDN 全球边缘节点，正常情况下 < 1 秒开始传输。HTTP 连接有 Node.js 默认的 `server.timeout`（2 分钟）。
+```typescript
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  // ...
+  await dbRun('DELETE FROM stories WHERE id = ?', [req.params.id]);
+  res.json({ message: 'Story deleted successfully' });
+});
+```
 
-### H7. R2 上传重复传输 → 🟡 已接受
+**事实**：
+1. 使用的是 `authMiddleware`，**不是** `adminMiddleware`——任何认证用户都能调用
+2. 仅需 `story.user_id === req.userId`（自己的故事），不要求管理员角色
+3. 只执行一条 `DELETE FROM stories`，不清理任何子表（comments、music、music_usage、likes）
+4. 无论前端是否展示删除按钮，API 端点存在且可被任意认证用户通过 curl/Postman 直接调用
 
-MiniMax 不支持直接推送到 R2。下载→上传是唯一路径。音乐的典型大小 < 10MB，内存占用可控。
+**对比**：[admin/stories.ts:48-53](../server/src/routes/admin/stories.ts#L48-L53) 正确做了 6 步级联清理，可证明开发者知道正确的做法，但未应用到用户面端点。
 
-### H8. 故事分析阻塞 → 🟡 已接受
+**额外验证**：[burn.ts:23-26](../server/src/routes/burn.ts#L23-L26) 删除评论后确实遗漏了被删评论对应的 `likes` 行。
 
-同步分析确保用户在发布后立即看到 tone/tags 结果（否则首次加载时为 null）。MiniMax 通常 2-5 秒返回。已有 `.catch()` 降级。
+**结论**：批驳中的前提"普通用户没有删除故事入口"是错误的。此问题维持 🟠 高优先级。
 
-### H9. processMusicAsync 无 .catch() → ✅ 已修复（commit ad663c5）
+---
 
-已添加 `.catch(err => console.error(...))`。
+### C6. setImmediate 通知丢失
 
-### H10. 歌词失败仍收费 → 🟡 设计权衡
+**开发者批驳**: 🟡 已接受，暂不修复。规模小（<100 关注者），服务器崩溃概率低于通知丢失成问题的概率。
 
-`extractLyrics` 失败降级为 `text.slice(0,200)` 仍生成歌曲（只是歌词质量下降），不是完全不生成。降级为 instrumental 会改变用户的付费期望（用户选择了 song 模式）。
+**AI 反批驳**: ✅ **批驳合理。** 当前规模下风险极低。建议在 `CLAUDE.md` 或代码注释中记录此技术债务，设定触发条件（如用户量 > 1000 时引入队列）。
 
-### M1. 管理员清理不完整 → 🟡 已接受
+---
 
-notification/messages/follows/blocked_users 表通常数据量小且不敏感。后续补全。
+### C7. 动态表名拼接
 
-### M2-M12 等其他 → 🟡 已记录
+**开发者批驳**: 🟡 低风险。白名单 `['story', 'comment']` 校验，表名仅两个可能值。
 
-均为性能优化和代码质量建议，当前数据量下无实际影响。
+**AI 反批驳**: ✅ **批驳合理。** 实测 [like.ts:12](../server/src/routes/like.ts#L12)：`if (!['story', 'comment'].includes(targetType))` + 第 20 行三元表达式。两个可能值，不存在注入路径。降级为低优先级建议。
+
+---
+
+### H1. 错误消息泄露给客户端
+
+**开发者批驳**: 🟡 部分接受。称"photo-inspiration 端点和 music generate 的 catch 已返回固定文案"。
+
+**AI 反批驳**: 🔴 **批驳不成立——与代码事实不符。** 实测仍有 3 处在返回 raw `err.message`：
+
+| 文件:行 | 代码 | 状态 |
+|:---|:---|:---|
+| [index.ts:95](../server/src/index.ts#L95) | `res.status(500).json({ error: message })` | ❌ 仍泄露 |
+| [music.ts:205](../server/src/routes/music.ts#L205) | `res.status(500).json({ error: message })` | ❌ 仍泄露 |
+| [music.ts:324](../server/src/routes/music.ts#L324) | `res.status(500).json({ error: message })` | ❌ 仍泄露 |
+| [index.ts:126](../server/src/index.ts#L126) | `res.status(500).json({ error: 'Internal server error' })` | ✅ 已通用 |
+| [story.ts:126](../server/src/routes/story.ts#L126) | `res.status(500).json({ error: 'Failed to create story' })` | ✅ 已通用 |
+
+仅全局错误处理器（index.ts:126）和 story.ts 返回了通用消息。PhotoInspiration 和 music.ts 的 3 处仍直接返回 `err.message`（包含 MiniMax API 内部错误、文件系统路径等）。
+
+**结论**：批驳声称"已返回固定文案"不准确。维持 🟠 高优先级。
+
+---
+
+### H2. XSS 防护
+
+**开发者批驳**: ✅ 不存在。React JSX 默认转义，无 `dangerouslySetInnerHTML`，API 消费者均为自有前端。
+
+**AI 反批驳**: ✅ **批驳成立。** 经验证：
+1. React JSX 的 `{variable}` 插值默认 HTML 转义
+2. 代码库中未检索到 `dangerouslySetInnerHTML` 的使用
+3. 当前仅自有前端消费 API
+
+**但建议**：在 API 文档中注明"返回的用户内容未经 HTML 转义，调用方需自行处理"，以防御未来第三方 API 消费者。
+
+---
+
+### H3. 列表缺少分页
+
+**开发者批驳**: 🟡 已有限制。当前用户量小，单用户最多几十篇故事。
+
+**AI 反批驳**: ✅ **批驳基本合理。** 当前数据量下确实无性能风险。但需注意：
+- `GET /users/me/usage` 每生成一次音乐写一条 `music_usage` 记录，是增长最快的数据
+- 建议对所有无分页查询添加 `LIMIT` 作为纵深防御（成本极低：每个查询加一行 `LIMIT 100`）
+
+降级为 🟡 建议。
+
+---
+
+### H4. helmet 安全头
+
+**开发者批驳**: 🟡 已知。Vercel/Render 边缘层已添加部分安全头。
+
+**AI 反批驳**: ✅ **批驳合理。** Vercel/Render 的边缘 CDN 通常会添加 `X-Content-Type-Options`、`Strict-Transport-Security` 等基础安全头。但仍建议在应用层加 `helmet` 以覆盖边缘层未提供的头（如 `X-Frame-Options`、`Referrer-Policy`），且不依赖部署平台。保持 🟡。
+
+---
+
+### H5. CORS 宽松
+
+**开发者批驳**: 🟡 已接受。预览部署需要 `*.vercel.app` 通配符，需认证端点仍需 JWT。
+
+**AI 反批驳**: ✅ **批驳成立。** 公开端点（story 列表、详情）本就对外开放；需认证的端点（支付、个人中心）需要有效 JWT，他人 Vercel 子域无法绕过。通配符策略合理。
+
+---
+
+### H6. 流无空闲超时
+
+**开发者批驳**: 🟡 已接受。R2 CDN 全球边缘 < 1 秒开始传输，Node.js 默认 `server.timeout` 为 2 分钟。
+
+**AI 反批驳**: ✅ **批驳基本合理。** 补充说明：Node.js `server.timeout` 默认 120 秒是针对**空闲 socket**（无任何数据传输）的超时，不是连接总时长。对于缓慢但持续传输的场景无效。但 R2 CDN 性能稳定，实际风险低。保持 🟡。
+
+---
+
+### H7. R2 上传重复传输
+
+**开发者批驳**: 🟡 已接受。MiniMax 不支持推送到 R2，音乐典型 < 10MB。
+
+**AI 反批驳**: ✅ **批驳成立。** MiniMax API 确实不支持 S3/R2 兼容的直接上传。当前架构是唯一可行路径。建议在 README 或运维文档中注明"服务器至少需要 512MB 内存以缓冲音乐上传"。保持 🟡。
+
+---
+
+### H8. 故事分析阻塞创建响应
+
+**开发者批驳**: 🟡 已接受。同步确保用户发布后立即看到 tone/tags，MiniMax 通常 2-5 秒返回。
+
+**AI 反批驳**: ✅ **批驳成立。** 这是有意识的设计选择——用户体验（即刻看到完整结果）优先于响应时间。且已有 `.catch()` 降级保护。保持 🟡。
+
+---
+
+### H9. processMusicAsync 无 .catch()
+
+**开发者批驳**: ✅ 已修复（commit ad663c5）。
+
+**AI 反批驳**: ✅ **批驳正确。** 实测 [music.ts:192](../server/src/routes/music.ts#L192) 已添加 `.catch(err => console.error(...))`。已修复。
+
+---
+
+### H10. 歌词失败仍收费
+
+**开发者批驳**: 🟡 设计权衡。降级为 instrumental 会改变付费期望。
+
+**AI 反批驳**: ✅ **批驳成立。** 用户在"song"模式下明确选择了有人声的歌曲，用 `text.slice(0,200)` 作为降级比完全没有更接近用户期望。设计权衡合理。
+
+---
+
+### M1. 管理员清理不完整
+
+**开发者批驳**: 🟡 已接受。数据量小且不敏感，后续补全。
+
+**AI 反批驳**: ✅ **批驳合理。** 保持 🟡。建议在清理函数处加 `// TODO: also clean notifications, messages, follows, blocked_users` 注释。
+
+---
+
+### M2-M12 等
+
+**开发者批驳**: 🟡 已记录。均为性能和代码质量建议，当前无实际影响。
+
+**AI 反批驳**: ✅ **批驳合理。** 全部保持原等级。
+
+---
+
+## 📊 核验总结
+
+| 结果 | 数量 | 条目 |
+|:---|:---:|:---|
+| ✅ 批驳正确（已修复或理由成立） | 25 | C2, C3, C4, C6, C7, H2, H3, H4, H5, H6, H7, H8, H9, H10, M1-M12 |
+| ❌ 批驳不成立（代码事实相悖） | **3** | **C1, C5, H1** |
+
+### 批驳不成立的 3 个关键问题：
+
+| 编号 | 问题 | 开发者声称 | 代码事实 | 实际严重度 |
+|:---|:---|:---|:---|:---|
+| **C1** | 音乐扣费逻辑 | "先查 existing 再扣积分" | 第 64-86 行**先扣积分**，第 112 行**后查** existing。existing 命中时**不退款** | 🔴🔴 升级为确定性的必现 bug |
+| **C5** | 故事删除无级联 | "普通用户没有删除入口" | `DELETE /api/story/:id` 使用 `authMiddleware`，任何认证用户可调用，无级联清理 | 🟠 维持高优先级 |
+| **H1** | 错误消息泄露 | "photo-inspiration 和 music 已返回固定文案" | 3 处仍返回 `res.status(500).json({ error: message })` | 🟠 维持高优先级 |
+
+### 原审核已修复的 3 个问题（值得肯定）：
+- ✅ C3: MiniMax timeout → 已加 `timeout: 120000`
+- ✅ C4: PRAGMA foreign_keys → 已加 `PRAGMA foreign_keys = ON`
+- ✅ H9: processMusicAsync .catch() → 已加错误处理
+
+### 反批驳后确认修复的 3 个问题（commit: 801fea4）：
+- ✅ C1: 重构 generate 端点——dedup 检查提到最前面，命中直接返回不扣积分、不调 AI
+- ✅ C5: 用户 DELETE 故事加完整级联清理（likes/comments/music_usage/music/burned）
+- ✅ H1: 3 处 `err.message` 改为通用错误文案 + `console.error` 记录真实错误
+
+**最终状态：全部 38 项已处理（已修复 6 项 + 已驳回/已接受 32 项）。**
