@@ -91,9 +91,8 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
     if (musicType === 'song') {
       if (lyricsMode === 'story_as_lyrics') {
         effectiveText = text.slice(0, 400);
-      } else {
-        effectiveText = await extractLyrics(text, effectiveMood || 'peace').catch(() => text.slice(0, 200));
       }
+      // song_ai: skip extractLyrics — MiniMax lyrics_optimizer handles it (saves one API call)
     }
 
     const generationParams = JSON.stringify({ effectiveText, musicOptions, lyricsMode: lyricsMode || 'ai_generated' });

@@ -286,7 +286,7 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
   const moodCN = MOOD_LABELS[profile.mood] || profile.mood;
 
   // Build structured prompt with BPM/Key
-  const prompt = [
+  let prompt = [
     `${randomKey}, ${bpm} BPM`,
     `${profile.style} style, ${moodCN}情绪`,
     `${profile.tempo} tempo, ${profile.instruments}为主奏乐器`,
@@ -310,17 +310,19 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
   };
 
   if (!isInstrumental) {
-    // song_ai mode: let MiniMax auto-generate structured lyrics
+    // song_ai mode: let MiniMax auto-generate structured lyrics based on story context
     if (options.lyricsMode !== 'story_as_lyrics') {
       payload.lyrics_optimizer = true;
+      // Inject story context into prompt so MiniMax generates story-relevant lyrics
+      prompt += `。故事主题：${text.slice(0, 300)}`;
     } else {
       // story_as_lyrics: use truncated text directly as lyrics
       payload.lyrics = text.slice(0, 300);
     }
   }
 
-  // Longer timeout for longer music
-  const timeout = durationSec <= 60 ? 120000 : 180000;
+  // Longer timeout for longer music (120s may need 3-4 min during peak)
+  const timeout = durationSec <= 60 ? 120000 : 240000;
 
   const response = await axios.post<MiniMaxMusicResponse>(
     `${process.env.MINIMAX_API_URL || 'https://api.minimaxi.com/v1'}/music_generation`,
