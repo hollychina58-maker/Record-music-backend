@@ -61,8 +61,45 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
     let isSubscription = false;
     let subscriptionId: number | null = null;
 
+    // Step 1: Check dedup FIRST — before any credit deduction or AI analysis
+    const existing = await dbGet<{ id: number; status: string; file_path: string | null }>(
+      "SELECT id, status, file_path FROM music WHERE story_id = ? AND status IN ('pending', 'completed') AND file_path IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+      [storyId]
+    );
+
+    if (existing) {
+      console.log('[Music] Reusing existing music record', existing.id, 'status:', existing.status, '— no credit deducted, no AI call');
+      // Calculate remaining counts without deducting
+      const subRemaining = subscription
+        ? (await dbGet<{ music_remaining: number | null }>('SELECT music_remaining FROM subscriptions WHERE id = ?', [subscription.id]))?.music_remaining
+        : null;
+      const userCount = !subscription
+        ? (await dbGet<{ free_music_count: number }>('SELECT free_music_count FROM users WHERE id = ?', [userId]))?.free_music_count
+        : null;
+      res.status(202).json({
+        data: { musicId: existing.id, status: 'pending', subscriptionRemaining: subRemaining ?? null, freeMusicCount: userCount ?? null },
+      });
+      return;
+    }
+
+    // Step 2: AI analysis — only run when we actually need to create new music
+    const effectiveMood = story.tone || musicMood || undefined;
+    const musicOptions: MusicOptions = { musicType, musicMood: effectiveMood, musicGenre };
+    const styleLabel = (effectiveMood && MOOD_LABELS[effectiveMood]) ? MOOD_LABELS[effectiveMood] : analyzeEmotion(text).style;
+
+    let effectiveText = text;
+    if (musicType === 'song') {
+      if (lyricsMode === 'story_as_lyrics') {
+        effectiveText = text.slice(0, 400);
+      } else {
+        effectiveText = await extractLyrics(text, effectiveMood || 'peace').catch(() => text.slice(0, 200));
+      }
+    }
+
+    const generationParams = JSON.stringify({ effectiveText, musicOptions, lyricsMode: lyricsMode || 'ai_generated' });
+
+    // Step 3: Deduct credit atomically (only after confirming no valid existing record)
     if (subscription) {
-      isSubscription = true;
       subscriptionId = subscription.id;
       if (subscription.music_remaining !== null) {
         const lock = await dbRun(
@@ -74,6 +111,7 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
           return;
         }
       }
+      isSubscription = true;
     } else {
       const lock = await dbRun(
         'UPDATE users SET free_music_count = free_music_count - 1 WHERE id = ? AND free_music_count > 0',
@@ -84,101 +122,14 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
         return;
       }
     }
-
-    // AI tone from story analysis takes priority over client-supplied musicMood
-    const effectiveMood = story.tone || musicMood || undefined;
-    const musicOptions: MusicOptions = { musicType, musicMood: effectiveMood, musicGenre };
-    const styleLabel = (effectiveMood && MOOD_LABELS[effectiveMood]) ? MOOD_LABELS[effectiveMood] : analyzeEmotion(text).style;
-
-    // Determine lyrics text for song mode
-    let effectiveText = text;
-    if (musicType === 'song') {
-      if (lyricsMode === 'story_as_lyrics') {
-        // Author explicitly wrote story as lyrics — use directly (truncate if too long)
-        effectiveText = text.slice(0, 400);
-        console.log('[Music] Song mode: using story text as direct lyrics, length:', effectiveText.length);
-      } else {
-        // AI rewrites narrative into proper verse+chorus lyrics
-        effectiveText = await extractLyrics(text, effectiveMood || 'peace').catch(() => text.slice(0, 200));
-        console.log('[Music] Song mode: AI-extracted lyrics length:', effectiveText.length);
-      }
-    }
-
-    // Persist generation params so URL can be refreshed later if the CDN link expires
-    const generationParams = JSON.stringify({ effectiveText, musicOptions, lyricsMode: lyricsMode || 'ai_generated' });
-
-    // Dedup: only consider records that have a valid URL.
-    // completed + NULL file_path means the URL expired and couldn't regenerate — treat as "need new".
-    const existing = await dbGet<{ id: number; status: string; file_path: string | null }>(
-      "SELECT id, status, file_path FROM music WHERE story_id = ? AND status IN ('pending', 'completed') AND file_path IS NOT NULL ORDER BY created_at DESC LIMIT 1",
-      [storyId]
+    // Step 4: Create music record and trigger async generation
+    const musicRecord = await dbRun(
+      "INSERT INTO music (story_id, status, style, music_type, generation_params) VALUES (?, 'pending', ?, ?, ?)",
+      [storyId, styleLabel, musicType || 'instrumental', generationParams]
     );
-
-    // Only deduct credit when actually creating a new music record
-    if (existing) {
-      console.log('[Music] Reusing existing music record', existing.id, 'status:', existing.status, '— no credit deducted');
-    } else {
-      // Atomic credit deduction + insert in a batch to avoid race
-      if (subscription) {
-        subscriptionId = subscription.id;
-        if (subscription.music_remaining !== null) {
-          const lock = await dbRun(
-            'UPDATE subscriptions SET music_remaining = music_remaining - 1 WHERE id = ? AND music_remaining > 0',
-            [subscription.id]
-          );
-          if (lock.changes === 0) {
-            res.status(402).json({ error: 'No music generation remaining. Please purchase a plan.' });
-            return;
-          }
-        }
-        isSubscription = true;
-      } else {
-        const lock = await dbRun(
-          'UPDATE users SET free_music_count = free_music_count - 1 WHERE id = ? AND free_music_count > 0',
-          [userId]
-        );
-        if (lock.changes === 0) {
-          res.status(402).json({ error: 'No music generation remaining. Please purchase a plan.' });
-          return;
-        }
-      }
-
-      // Final re-check after deducting credit — another request may have created the record
-      const recheck = await dbGet<{ id: number; status: string }>(
-        "SELECT id, status FROM music WHERE story_id = ? AND status IN ('pending', 'completed') AND file_path IS NOT NULL ORDER BY created_at DESC LIMIT 1",
-        [storyId]
-      );
-      if (recheck) {
-        // Race hit: refund the credit we just deducted and return existing record
-        if (isSubscription && subscriptionId) {
-          await dbRun('UPDATE subscriptions SET music_remaining = music_remaining + 1 WHERE id = ?', [subscriptionId]);
-        } else {
-          await dbRun('UPDATE users SET free_music_count = free_music_count + 1 WHERE id = ?', [userId]);
-        }
-        res.status(202).json({
-          data: {
-            musicId: recheck.id,
-            status: 'pending',
-            subscriptionRemaining: subscription
-              ? (await dbGet<{ music_remaining: number | null }>('SELECT music_remaining FROM subscriptions WHERE id = ?', [subscriptionId!]))?.music_remaining
-              : null,
-            freeMusicCount: !subscription
-              ? (await dbGet<{ free_music_count: number }>('SELECT free_music_count FROM users WHERE id = ?', [userId]))?.free_music_count
-              : null,
-          },
-        });
-        return;
-      }
-    }
-
-    const musicRecord = existing
-      ? { lastInsertRowid: existing.id }
-      : await dbRun(
-          "INSERT INTO music (story_id, status, style, music_type, generation_params) VALUES (?, 'pending', ?, ?, ?)",
-          [storyId, styleLabel, musicType || 'instrumental', generationParams]
-        );
     const musicId = musicRecord.lastInsertRowid as number;
 
+    // Step 5: Read remaining counts after deduction
     const subscriptionRemaining = subscription
       ? (await dbGet<{ music_remaining: number | null }>('SELECT music_remaining FROM subscriptions WHERE id = ?', [subscriptionId ?? subscription.id]))?.music_remaining
       : null;
@@ -186,11 +137,9 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
       ? await dbGet<{ free_music_count: number }>('SELECT free_music_count FROM users WHERE id = ?', [userId])
       : null;
 
-    // Only trigger async generation for newly created records
-    if (!existing) {
-      processMusicAsync(userId, storyId, musicId, effectiveText, musicOptions, isSubscription, subscriptionId)
-        .catch(err => console.error('[Music] Unhandled error in processMusicAsync:', err));
-    }
+    // Step 6: Fire-and-forget async generation
+    processMusicAsync(userId, storyId, musicId, effectiveText, musicOptions, isSubscription, subscriptionId)
+      .catch(err => console.error('[Music] Unhandled error in processMusicAsync:', err));
 
     res.status(202).json({
       data: {
@@ -201,8 +150,8 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ error: message });
+    console.error('[Music Generate]', error instanceof Error ? error.message : error);
+    res.status(500).json({ error: '音乐生成服务暂时不可用，请稍后重试' });
   }
 });
 
@@ -321,7 +270,8 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ error: message });
+    console.error('[Music Stream]', message);
+    res.status(500).json({ error: '音频流服务暂时不可用，请稍后重试' });
   }
 });
 

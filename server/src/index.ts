@@ -92,7 +92,7 @@ app.post('/api/photo-inspiration', async (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('[PhotoInspiration] Error:', message);
-    res.status(500).json({ error: message });
+    res.status(500).json({ error: '图片分析服务暂时不可用，请稍后重试' });
   }
 });
 

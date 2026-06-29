@@ -145,7 +145,15 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
   if (story.user_id !== req.userId) { res.status(403).json({ error: 'Not authorized' }); return; }
 
-  await dbRun('DELETE FROM stories WHERE id = ?', [req.params.id]);
+  // Cascade cleanup — match admin/stories.ts pattern
+  const id = parseInt(req.params.id, 10);
+  await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id IN (SELECT id FROM comments WHERE story_id = ?)', ['comment', id]);
+  await dbRun('DELETE FROM comments WHERE story_id = ?', [id]);
+  await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id = ?', ['story', id]);
+  await dbRun('DELETE FROM music_usage WHERE story_id = ?', [id]);
+  await dbRun('DELETE FROM music WHERE story_id = ?', [id]);
+  await dbRun('DELETE FROM burned_stories WHERE story_id = ?', [id]);
+  await dbRun('DELETE FROM stories WHERE id = ?', [id]);
   res.json({ message: 'Story deleted successfully' });
 });
 
