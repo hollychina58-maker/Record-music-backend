@@ -440,7 +440,7 @@ export function StoryDetailPage() {
       <CommentSection storyId={story.id} isBurned={story.isBurned} commentLikes={commentLikes} />
         </div>
         {story && !story.isBurned && story.user_id && (
-          <AuthorSidebar authorId={story.user_id} authorNickname={story.author_nickname || ''} />
+          <AuthorSidebar authorId={story.user_id} authorNickname={story.author_nickname || ''} excludeStoryId={story.id} />
         )}
         </div>
 

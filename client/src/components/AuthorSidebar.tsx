@@ -19,7 +19,7 @@ interface AuthorStory {
   created_at: string;
 }
 
-export function AuthorSidebar({ authorId, authorNickname }: { authorId: number; authorNickname: string }) {
+export function AuthorSidebar({ authorId, authorNickname, excludeStoryId }: { authorId: number; authorNickname: string; excludeStoryId?: number }) {
   const { t } = useLanguage();
   const [author, setAuthor] = useState<AuthorInfo | null>(null);
   const [stories, setStories] = useState<AuthorStory[]>([]);
@@ -29,8 +29,8 @@ export function AuthorSidebar({ authorId, authorNickname }: { authorId: number; 
     apiService.clientGet('/users/' + authorId + '/profile')
       .then(d => setAuthor(d.data as AuthorInfo))
       .catch(() => {});
-    apiService.clientGet('/users/' + authorId + '/stories?limit=3')
-      .then(d => setStories((d.data as AuthorStory[]).filter(s => s.title)))
+    apiService.clientGet('/users/' + authorId + '/stories?limit=4')
+      .then(d => setStories((d.data as AuthorStory[]).filter(s => s.title && s.id !== excludeStoryId).slice(0, 3)))
       .catch(() => {});
   }, [authorId]);
 
