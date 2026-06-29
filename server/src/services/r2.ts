@@ -71,7 +71,14 @@ export async function deleteFromR2(fileUrl: string): Promise<void> {
   // Extract key from R2 URL path (e.g. https://pub-xxx.r2.dev/music/10/33.mp3 → music/10/33.mp3)
   try {
     const url = new URL(fileUrl);
-    const key = url.pathname.slice(1); // remove leading /
+    // Safety: verify the URL belongs to our R2 bucket before deleting
+    const publicUrlHost = process.env.R2_PUBLIC_URL ? new URL(process.env.R2_PUBLIC_URL).hostname : null;
+    const expectedHost = publicUrlHost || `${bucket}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+    if (url.hostname !== expectedHost) {
+      console.warn('[R2] Skipping delete — URL hostname mismatch:', url.hostname, 'expected:', expectedHost);
+      return;
+    }
+    const key = url.pathname.slice(1);
     if (!key) return;
     await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     console.log('[R2] Deleted:', key);

@@ -23,14 +23,22 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
 
   useEffect(() => {
     const token = useAuthStore.getState().token;
-    const urlWithToken = token
-      ? `${audioUrl}${audioUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
-      : audioUrl;
-    const audio = new Audio(urlWithToken);
+    const audio = new Audio();
     // Mobile: preload metadata only to save bandwidth; desktop: full preload
     const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent);
     audio.preload = isMobile ? 'metadata' : 'auto';
     audioRef.current = audio;
+
+    // Use fetch + Blob to avoid leaking JWT in URL query params (Audio() doesn't support headers)
+    if (token) {
+      fetch(audioUrl, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.blob())
+        .then(blob => { audio.src = URL.createObjectURL(blob); audio.load(); })
+        .catch(() => setPlayError('network'));
+    } else {
+      audio.src = audioUrl;
+      audio.load();
+    }
 
     const onLoaded = () => setDuration(audio.duration || 0);
     const onDurationChange = () => { if (audio.duration && !isNaN(audio.duration)) setDuration(audio.duration); };

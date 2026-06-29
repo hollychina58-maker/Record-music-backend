@@ -26,11 +26,10 @@ router.post('/stories/:id/burn', authMiddleware, async (req: AuthRequest, res: R
     'SELECT file_path FROM music WHERE story_id = ? AND file_path IS NOT NULL', [storyId]
   );
   for (const m of musicRecords) {
-    deleteFromR2(m.file_path).catch(() => {});
+    deleteFromR2(m.file_path).catch(err => console.error('[Burn] R2 music delete failed:', err instanceof Error ? err.message : err));
   }
-  // Cover image
   if (story.cover_image) {
-    deleteFromR2(story.cover_image).catch(() => {});
+    deleteFromR2(story.cover_image).catch(err => console.error('[Burn] R2 cover delete failed:', err instanceof Error ? err.message : err));
   }
 
   // ── 2. Keep one memorial comment, then clean up DB ──

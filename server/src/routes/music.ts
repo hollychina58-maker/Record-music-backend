@@ -35,7 +35,7 @@ async function processMusicAsync(
     console.error('[Music] Async generation failed:', message);
     await dbRun("UPDATE music SET status = 'failed' WHERE id = ?", [musicId]);
     if (isSubscription && subscriptionId) {
-      await dbRun('UPDATE subscriptions SET music_remaining = music_remaining + 1 WHERE id = ?', [subscriptionId]);
+      await dbRun('UPDATE subscriptions SET music_remaining = music_remaining + 1 WHERE id = ? AND music_remaining IS NOT NULL', [subscriptionId]);
     } else if (!isSubscription) {
       await dbRun('UPDATE users SET free_music_count = free_music_count + 1 WHERE id = ?', [userId]);
     }
@@ -63,7 +63,7 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
 
     // Step 1: Check dedup FIRST — before any credit deduction or AI analysis
     const existing = await dbGet<{ id: number; status: string; file_path: string | null }>(
-      "SELECT id, status, file_path FROM music WHERE story_id = ? AND status IN ('pending', 'completed') AND file_path IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+      "SELECT id, status, file_path FROM music WHERE story_id = ? AND status IN ('pending', 'completed') AND (file_path IS NOT NULL OR status = 'pending') ORDER BY created_at DESC LIMIT 1",
       [storyId]
     );
 
@@ -77,7 +77,7 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
         ? (await dbGet<{ free_music_count: number }>('SELECT free_music_count FROM users WHERE id = ?', [userId]))?.free_music_count
         : null;
       res.status(202).json({
-        data: { musicId: existing.id, status: 'pending', subscriptionRemaining: subRemaining ?? null, freeMusicCount: userCount ?? null },
+        data: { musicId: existing.id, status: existing.status, subscriptionRemaining: subRemaining ?? null, freeMusicCount: userCount ?? null },
       });
       return;
     }

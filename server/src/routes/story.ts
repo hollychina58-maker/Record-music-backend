@@ -4,7 +4,7 @@ import { authMiddleware, optionalAuthMiddleware, AuthRequest } from '../middlewa
 import { detectLanguage } from '../services/language.js';
 import { lookupGeo } from '../services/geoip.js';
 import { generateCoverImage, buildCoverPrompt } from '../services/minimax.js';
-import { uploadToR2 } from '../services/r2.js';
+import { uploadToR2, deleteFromR2 } from '../services/r2.js';
 import { analyzeStory } from '../services/storyAnalysis.js';
 
 const router = Router();
@@ -148,8 +148,24 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
   if (story.user_id !== req.userId) { res.status(403).json({ error: 'Not authorized' }); return; }
 
-  // Cascade cleanup — match admin/stories.ts pattern
+  // Cascade cleanup — match admin/stories.ts pattern + R2 cleanup
   const id = parseInt(req.params.id, 10);
+
+  // Delete R2 files before DB records (need file_path from music/cover before deletion)
+  const musicFiles = await dbAll<{ file_path: string }>(
+    'SELECT file_path FROM music WHERE story_id = ? AND file_path IS NOT NULL', [id]
+  );
+  for (const m of musicFiles) {
+    deleteFromR2(m.file_path).catch(err => console.error('[Story Delete] R2 music delete failed:', err));
+  }
+  const storyRow = await dbGet<{ cover_image: string | null }>(
+    'SELECT cover_image FROM stories WHERE id = ?', [id]
+  );
+  if (storyRow?.cover_image) {
+    deleteFromR2(storyRow.cover_image).catch(err => console.error('[Story Delete] R2 cover delete failed:', err));
+  }
+
+  // DB cascade
   await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id IN (SELECT id FROM comments WHERE story_id = ?)', ['comment', id]);
   await dbRun('DELETE FROM comments WHERE story_id = ?', [id]);
   await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id = ?', ['story', id]);
