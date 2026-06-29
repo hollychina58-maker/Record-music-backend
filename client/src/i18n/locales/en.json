@@ -328,5 +328,16 @@
   "follow.follow": "Follow",
   "follow.following": "Following",
   "follow.comingSoon": "Coming soon",
-  "msg.comingSoon": "Coming soon"
+  "msg.comingSoon": "Coming soon",
+  "notif.title": "Notifications",
+  "notif.tabStories": "Stories",
+  "notif.tabMessages": "Messages",
+  "notif.empty": "No notifications",
+  "notif.markAllRead": "Mark all read",
+  "notif.newStory": "{author} published a new story",
+  "notif.newMessage": "{from} sent a message",
+  "time.justNow": "just now",
+  "time.minAgo": "m ago",
+  "time.hrAgo": "h ago",
+  "time.dayAgo": "d ago"
 }

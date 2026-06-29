@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useLanguage } from '../i18n/LanguageContext';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { NotificationBell } from './NotificationBell';
 import './Layout.css';
 
 interface LayoutProps {
@@ -57,6 +58,7 @@ export function Layout({ children }: LayoutProps) {
 
             <div className="nav-links">
               <LanguageSwitcher />
+              {isAuthenticated && <NotificationBell />}
               <div className="nav-dropdown" ref={writeMenuRef}>
                 <button
                   className={`nav-link nav-dropdown-toggle${location.pathname.startsWith('/create') || location.pathname === '/inspiration' ? ' nav-link--active' : ''}`}

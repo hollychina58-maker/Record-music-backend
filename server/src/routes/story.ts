@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { dbGet, dbAll, dbRun } from '../models/database.js';
+import { dbGet, dbAll, dbRun, dbBatch } from '../models/database.js';
 import { authMiddleware, optionalAuthMiddleware, AuthRequest } from '../middleware/auth.js';
 import { detectLanguage } from '../services/language.js';
 import { lookupGeo } from '../services/geoip.js';
@@ -97,6 +97,30 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     res.status(201).json({
       data: { id: storyId, userId: req.userId || null, title, content, metadata, tone, tags },
     });
+
+    // Async: create notifications for followers
+    const authorId = req.userId;
+    if (authorId) {
+      setImmediate(async () => {
+        try {
+          const followers = await dbAll<{ follower_id: number }>(
+            'SELECT follower_id FROM follows WHERE followed_id = ?', [authorId]
+          );
+          if (followers.length === 0) return;
+          const BATCH = 200;
+          for (let i = 0; i < followers.length; i += BATCH) {
+            const batch = followers.slice(i, i + BATCH).map(f => ({
+              sql: 'INSERT OR IGNORE INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
+              args: [f.follower_id, 'new_story', storyId, authorId],
+            }));
+            await dbBatch(batch);
+          }
+          console.log(`[Story] Created ${followers.length} notifications for story ${storyId}`);
+        } catch (e) {
+          console.error('[Story] Failed to create notifications:', e);
+        }
+      });
+    }
   } catch (err) {
     console.error('[Story] Create error:', err);
     res.status(500).json({ error: 'Failed to create story' });

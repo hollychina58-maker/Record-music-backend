@@ -331,5 +331,16 @@
   "follow.follow": "关注",
   "follow.following": "已关注",
   "follow.comingSoon": "即将上线",
-  "msg.comingSoon": "即将上线"
+  "msg.comingSoon": "即将上线",
+  "notif.title": "通知",
+  "notif.tabStories": "故事",
+  "notif.tabMessages": "私信",
+  "notif.empty": "暂无通知",
+  "notif.markAllRead": "全部已读",
+  "notif.newStory": "{author} 发表了新故事",
+  "notif.newMessage": "{from} 发来私信",
+  "time.justNow": "刚刚",
+  "time.minAgo": "分钟前",
+  "time.hrAgo": "小时前",
+  "time.dayAgo": "天前"
 }

@@ -22,6 +22,8 @@ import adminUserRoutes from './routes/admin/users.js';
 import adminProductRoutes from './routes/admin/products.js';
 import adminCouponRoutes from './routes/admin/coupons.js';
 import adminOrderRoutes from './routes/admin/orders.js';
+import followRoutes from './routes/follow.js';
+import notificationRoutes from './routes/notification.js';
 
 dotenv.config();
 
@@ -101,6 +103,8 @@ app.use('/api', sitemapRoutes);
 app.use('/api', burnRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/likes', likeRoutes);
+app.use('/api', followRoutes);
+app.use('/api', notificationRoutes);
 app.use('/api/admin', adminDashboardRoutes);
 app.use('/api/admin', adminStoryRoutes);
 app.use('/api/admin', adminCommentRoutes);

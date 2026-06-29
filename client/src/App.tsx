@@ -6,6 +6,7 @@ import { MusicBannerProvider, useMusicBanner } from './components/MusicBanner';
 import { useLanguage } from './i18n/LanguageContext';
 import { apiService } from './services/api';
 import { useAuthStore } from './stores/authStore';
+import { useNotificationStore } from './stores/notificationStore';
 import { HomePage } from './pages/HomePage';
 import { CreateStoryPage } from './pages/CreateStoryPage';
 import { StoryDetailPage } from './pages/StoryDetailPage';
@@ -90,6 +91,25 @@ function PendingMusicPoller() {
   return null;
 }
 
+function NotificationPoller() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const setUnreadCount = useNotificationStore((s) => s.setUnreadCount);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const poll = () => {
+      apiService.clientGet('/notifications/unread-count')
+        .then((d: any) => setUnreadCount(d.count ?? 0))
+        .catch(() => {});
+    };
+    poll();
+    const interval = setInterval(poll, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, setUnreadCount]);
+
+  return null;
+}
+
 function App() {
   const { language, dir } = useLanguage();
 
@@ -124,6 +144,7 @@ function App() {
             </Route>
           </Routes>
           <PendingMusicPoller />
+          <NotificationPoller />
           <ToastContainer />
         </Layout>
       </MusicBannerProvider>
