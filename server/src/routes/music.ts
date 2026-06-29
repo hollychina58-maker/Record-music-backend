@@ -83,7 +83,7 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
     }
 
     // Step 2: AI analysis — only run when we actually need to create new music
-    const effectiveMood = story.tone || musicMood || undefined;
+    const effectiveMood = musicMood || story.tone || undefined;
     const musicOptions: MusicOptions = { musicType, musicMood: effectiveMood, musicGenre, duration, lyricsMode };
     const styleLabel = (effectiveMood && MOOD_LABELS[effectiveMood]) ? MOOD_LABELS[effectiveMood] : analyzeEmotion(text).style;
 

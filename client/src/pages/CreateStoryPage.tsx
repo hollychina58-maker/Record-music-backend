@@ -29,6 +29,7 @@ export function CreateStoryPage() {
   const [musicMode, setMusicMode] = useState<'instrumental' | 'song_ai' | 'song_as_lyrics'>('instrumental');
   const [musicGenre, setMusicGenre] = useState('chinese_folk');
   const [musicDuration, setMusicDuration] = useState<'short' | 'medium' | 'long'>('medium');
+  const [musicMood, setMusicMood] = useState('');  // empty = AI auto-detect
   const [searchParams] = useSearchParams();
 
   // Carry-over from photo inspiration page
@@ -103,6 +104,7 @@ export function CreateStoryPage() {
             musicType,
             musicGenre,
             duration: musicDuration,
+            ...(musicMood ? { musicMood } : {}),
             ...(musicType === 'song' ? { lyricsMode } : {}),
           });
           // Immediately sync the server-returned credit count into the store so both
@@ -265,6 +267,21 @@ export function CreateStoryPage() {
                       </label>
                     ))}
                   </div>
+                </div>
+
+                <div className="music-option">
+                  <label>{t('create.musicMood')}</label>
+                  <select value={musicMood} onChange={(e) => setMusicMood(e.target.value)}>
+                    <option value="">{t('create.mood.auto')}</option>
+                    <option value="sorrow">{t('tone.sorrow')}</option>
+                    <option value="joy">{t('tone.joy')}</option>
+                    <option value="peace">{t('tone.peace')}</option>
+                    <option value="nostalgia">{t('tone.nostalgia')}</option>
+                    <option value="warmth">{t('tone.warmth')}</option>
+                    <option value="loneliness">{t('tone.loneliness')}</option>
+                    <option value="passion">{t('tone.passion')}</option>
+                    <option value="mystery">{t('tone.mystery')}</option>
+                  </select>
                 </div>
 
                 <div className="music-option">

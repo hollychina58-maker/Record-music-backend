@@ -45,6 +45,8 @@
   "create.noFreeMusic": "No free generation left",
   "create.buyNow": "Get Plan",
   "create.generating": "Composing music...",
+  "create.musicMood": "Mood",
+  "create.mood.auto": "AI Auto-detect",
   "create.musicMode": "Music Style",
   "create.mode.instrumental": "Instrumental",
   "create.mode.instrumentalHint": "AI composes background music based on the story's mood — no vocals",

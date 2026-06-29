@@ -45,6 +45,8 @@
   "create.noFreeMusic": "免费次数已用完",
   "create.buyNow": "去购买",
   "create.generating": "配乐生成中...",
+  "create.musicMood": "情绪基调",
+  "create.mood.auto": "AI 自动检测",
   "create.musicMode": "配乐方式",
   "create.mode.instrumental": "纯音乐",
   "create.mode.instrumentalHint": "AI 根据故事基调生成纯器乐配乐，无人声",
