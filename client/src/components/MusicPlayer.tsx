@@ -77,6 +77,7 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
     return () => {
       cancelAnimationFrame(rafRef.current);
       audio.pause();
+      if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
       audio.removeEventListener('loadedmetadata', onLoaded);
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('timeupdate', onTime);
