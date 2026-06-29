@@ -30,11 +30,12 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
     audioRef.current = audio;
 
     // Use fetch + Blob to avoid leaking JWT in URL query params (Audio() doesn't support headers)
+    const controller = new AbortController();
     if (token) {
-      fetch(audioUrl, { headers: { Authorization: `Bearer ${token}` } })
+      fetch(audioUrl, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
         .then(r => r.blob())
-        .then(blob => { audio.src = URL.createObjectURL(blob); audio.load(); })
-        .catch(() => setPlayError('network'));
+        .then(blob => { if (!controller.signal.aborted) { audio.src = URL.createObjectURL(blob); audio.load(); } })
+        .catch(() => { if (!controller.signal.aborted) setPlayError('network'); });
     } else {
       audio.src = audioUrl;
       audio.load();
@@ -76,6 +77,7 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
 
     return () => {
       cancelAnimationFrame(rafRef.current);
+      controller.abort();
       audio.pause();
       if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
       audio.removeEventListener('loadedmetadata', onLoaded);

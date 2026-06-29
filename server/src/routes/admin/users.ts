@@ -106,6 +106,10 @@ router.delete('/users/:id', authMiddleware, adminMiddleware, async (req: AuthReq
   await dbRun('DELETE FROM orders WHERE user_id = ?', [id]);
   await dbRun('DELETE FROM likes WHERE user_id = ?', [id]);
   await dbRun('DELETE FROM music_usage WHERE user_id = ?', [id]);
+  await dbRun('DELETE FROM notifications WHERE user_id = ? OR actor_id = ?', [id, id]);
+  await dbRun('DELETE FROM messages WHERE from_user_id = ? OR to_user_id = ?', [id, id]);
+  await dbRun('DELETE FROM follows WHERE follower_id = ? OR followed_id = ?', [id, id]);
+  await dbRun('DELETE FROM blocked_users WHERE blocker_id = ? OR blocked_id = ?', [id, id]);
   await dbRun('DELETE FROM users WHERE id = ?', [id]);
 
   res.json({ success: true, data: { id } });

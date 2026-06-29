@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { authMiddleware, AuthRequest } from '../../middleware/auth.js';
 import { adminMiddleware } from '../../middleware/admin.js';
 import { dbGet, dbAll, dbRun } from '../../models/database.js';
+import { deleteFromR2 } from '../../services/r2.js';
 
 const router = Router();
 
@@ -42,14 +43,27 @@ router.get('/stories', authMiddleware, adminMiddleware, async (req: AuthRequest,
 
 router.delete('/stories/:id', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id, 10);
-  const story = await dbGet('SELECT id FROM stories WHERE id = ?', [id]);
+  const story = await dbGet<{ cover_image: string | null }>('SELECT id, cover_image FROM stories WHERE id = ?', [id]);
   if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
 
+  // R2 cleanup before DB (need file_path before DELETE music)
+  const musicFiles = await dbAll<{ file_path: string }>(
+    'SELECT file_path FROM music WHERE story_id = ? AND file_path IS NOT NULL', [id]
+  );
+  for (const m of musicFiles) {
+    deleteFromR2(m.file_path).catch(err => console.error('[Admin Delete] R2 music delete failed:', err));
+  }
+  if (story.cover_image) {
+    deleteFromR2(story.cover_image).catch(err => console.error('[Admin Delete] R2 cover delete failed:', err));
+  }
+
+  // Cascade: deepest FK first
+  await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id IN (SELECT id FROM comments WHERE story_id = ?)', ['comment', id]);
   await dbRun('DELETE FROM comments WHERE story_id = ?', [id]);
-  await dbRun('DELETE FROM burned_stories WHERE story_id = ?', [id]);
+  await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id = ?', ['story', id]);
   await dbRun('DELETE FROM music_usage WHERE story_id = ?', [id]);
   await dbRun('DELETE FROM music WHERE story_id = ?', [id]);
-  await dbRun("DELETE FROM likes WHERE target_type = 'story' AND target_id = ?", [id]);
+  await dbRun('DELETE FROM burned_stories WHERE story_id = ?', [id]);
   await dbRun('DELETE FROM stories WHERE id = ?', [id]);
 
   res.json({ success: true, data: { id } });

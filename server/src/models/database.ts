@@ -230,8 +230,10 @@ CREATE TABLE IF NOT EXISTS blocked_users (
 async function addColumnIfMissing(table: string, column: string, def: string): Promise<void> {
   try {
     await client.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
-  } catch {
-    // Column already exists — ignore
+  } catch (err: any) {
+    // Only ignore "duplicate column" errors — anything else is a real problem
+    if (err?.message?.includes('duplicate column')) return;
+    throw err;
   }
 }
 
