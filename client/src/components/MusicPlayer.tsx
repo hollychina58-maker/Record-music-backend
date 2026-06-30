@@ -16,10 +16,16 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
   const { t } = useLanguage();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number>(0);
+  const visRafRef = useRef<number>(0);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const barRefs = useRef<HTMLDivElement[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playError, setPlayError] = useState<'expired' | 'network' | false>(false);
+  const BARS = 24;
+  const barArray = Array.from({ length: BARS }, (_, i) => i);
 
   useEffect(() => {
     const token = useAuthStore.getState().token;
@@ -77,6 +83,9 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
 
     return () => {
       cancelAnimationFrame(rafRef.current);
+      cancelAnimationFrame(visRafRef.current);
+      audioCtxRef.current?.close().catch(() => {});
+      audioCtxRef.current = null;
       controller.abort();
       audio.pause();
       if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
@@ -90,6 +99,37 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
     };
   }, [audioUrl]);
 
+  const initVisualizer = (audio: HTMLAudioElement) => {
+    if (audioCtxRef.current) return; // already connected
+    try {
+      const ctx = new AudioContext();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 128; // 64 frequency bins — enough for 24 visible bars
+      analyser.smoothingTimeConstant = 0.7;
+      const source = ctx.createMediaElementSource(audio);
+      source.connect(analyser);
+      analyser.connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
+
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const tick = () => {
+        analyser.getByteFrequencyData(data);
+        barRefs.current.forEach((bar, i) => {
+          // Spread 64 bins into 24 bars with exponential scaling for better visual
+          const binIdx = Math.floor(i * analyser.frequencyBinCount / BARS);
+          const h = Math.pow(data[binIdx] / 255, 0.7) * 100;
+          if (bar) bar.style.setProperty('--bar-height', `${h}%`);
+        });
+        // Also set overall intensity for background ink blob
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        document.documentElement.style.setProperty('--music-intensity', `${avg / 255}`);
+        visRafRef.current = requestAnimationFrame(tick);
+      };
+      visRafRef.current = requestAnimationFrame(tick);
+    } catch { /* AudioContext not supported — silently skip */ }
+  };
+
   const togglePlay = () => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -97,14 +137,17 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
     if (isPlaying) {
       audio.pause();
       setIsPlaying(false);
+      cancelAnimationFrame(visRafRef.current);
     } else {
       setPlayError(false);
-      // iOS Safari: reload audio before playing dynamically-created sources
       if (audio.readyState === 0) audio.load();
-      audio.play().then(() => setIsPlaying(true)).catch(() => {
-        // Don't override — let onError event distinguish expired vs network
-        // iOS Safari autoplay block rejects without setting audio.error,
-        // so onError won't fire and user just sees no playback (no misleading error)
+      // Resume AudioContext after user gesture (autoplay policy)
+      audioCtxRef.current?.resume();
+      audio.play().then(() => {
+        setIsPlaying(true);
+        initVisualizer(audio);
+      }).catch(() => {
+        // iOS Safari autoplay block — onError will handle if it's a real error
       });
     }
   };
@@ -159,6 +202,13 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
       {playError === 'network' && (
         <p className="ink-player__error">播放失败，请检查网络后重试</p>
       )}
+
+      {/* Visualizer bars — only visible when playing */}
+      <div className={`ink-player__viz${isPlaying ? ' ink-player__viz--active' : ''}`} aria-hidden="true">
+        {barArray.map(i => (
+          <div key={i} className="ink-player__bar" ref={el => { barRefs.current[i] = el!; }} />
+        ))}
+      </div>
 
       <div className="ink-player__progress">
         <span className="ink-player__time">{formatTime(currentTime)}</span>

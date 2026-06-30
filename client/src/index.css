@@ -532,3 +532,16 @@
 [lang="ru"] {
   --font-ink: 'Noto Sans', 'Noto Serif SC', serif;
 }
+
+/* ===== Scroll Reveal ===== */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s var(--ease-out-expo),
+              transform 0.6s var(--ease-out-expo);
+}
+
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}

@@ -444,3 +444,31 @@
   font-family: var(--font-ink);
   margin: var(--space-2) 0 0;
 }
+
+/* Visualizer */
+.ink-player__viz {
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 40px;
+  margin: var(--space-2) 0;
+}
+
+.ink-player__viz--active {
+  display: flex;
+}
+
+.ink-player__bar {
+  width: 4px;
+  height: var(--bar-height, 5%);
+  min-height: 2px;
+  background: linear-gradient(to top, var(--ink-faint), var(--ink-dark));
+  border-radius: 2px 2px 0 0;
+  transition: height 0.08s linear;
+}
+
+@media (max-width: 640px) {
+  .ink-player__bar { width: 3px; gap: 1px; }
+  .ink-player__viz { height: 32px; }
+}
