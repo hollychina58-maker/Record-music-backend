@@ -845,6 +845,38 @@ const revealRef = useScrollReveal<HTMLDivElement>();
 
 ### 实施验证修复（commit 2e51569）
 
-**D1 `--music-intensity` 未消费 → ✅ 已修复**：`index.css` .ink-blob 规则消费 `--music-intensity`，scale(1+0.25) + opacity(0.06+0.06) 随音乐律动。
+**D1 `--music-intensity` 未消费 → ✅ 已修复**：`index.css:114-118` — `.ink-blob` 规则消费 `--music-intensity`，`scale(1+0.25)` + `opacity(0.06+0.06)`，`transition: 0.15s linear`。全局生效——任何页面播放音乐时，背景墨渍都会响应。
 
-**D2 useScrollReveal 未使用 → ✅ 已修复**：HomePage 故事卡片网格挂载 `revealRef` + `reveal-on-scroll` 类。
+**D2 useScrollReveal 未使用 → ✅ 已修复**：`HomePage.tsx:8` import + `L47` 调用 + `L147` 挂载 `ref={revealRef}` + `reveal-on-scroll` 类。故事卡片网格滚动进入视口时触发 `fadeInUp`。
+
+---
+
+## 🔍 设计增强最终验证（2026-06-30，commit 2e51569 → 039a586）
+
+| # | 功能 | 状态 | 证据 |
+|:---|:---|:---:|:---|
+| D1 | 背景墨渍随音乐律动 | ✅ | `index.css:114-118` — `.ink-blob` 消费 `var(--music-intensity)`，scale+opacity 动态响应 |
+| D2 | 滚动渐显 | ✅ | `HomePage.tsx:8,47,147` — import → 调用 → 挂载 ref，完整链路 |
+| P0 | 频谱柱可视化 | ✅ | 24 bars、fftSize 128、exponential scaling、rAF 驱动 |
+| P0 | 桌面宽屏网格 | ✅ | 1600px+ → 1400px + auto-fill 360px |
+| P1 | 卡片错落 | ✅ | 移动端 rotate ±0.3deg + 负 margin + hover 回正 |
+
+### 补充发现
+
+**D5. 滚动渐显粒度偏粗** 🟡：`revealRef` 挂载在整个 `.feed-grid` 容器上，意味着所有卡片作为整体一次性渐显，而非逐张 staggered。方案建议的 `stagger-1/2/3/4/5` 延迟类可以后续添加到子卡片上实现逐张亮相。
+
+### 设计增强方案终态
+
+| 优先级 | 状态 |
+|:---|:---|
+| ⚡ P0 音乐可视化 | ✅ 完整 |
+| ⚡ P0 桌面宽度 | ✅ 完整 |
+| 🔧 P1 卡片错落 | ✅ 完整 |
+| 🔧 P1 滚动渐显 | ✅ 完整（粒度可优化） |
+| 🟡 P2 横向滑动 / 漂浮装饰 / 页面过渡 | 待后续迭代 |
+
+**P0/P1 全部闭环，零功能缺失。**
+
+### D5 粒度优化（commit 366c659）
+
+**D5 滚动渐显粒度偏粗 → ✅ 已优化**：给每张卡片 `style={{ transitionDelay: ${0.08 * i}s }}`，配合 `reveal-on-scroll` 的 transition 实现逐张渐显 stagger 效果。
