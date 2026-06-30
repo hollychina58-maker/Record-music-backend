@@ -1047,3 +1047,9 @@ export function useScrollReveal(className: string, threshold = 0.1) {
 - `.story-card` 用 `opacity: 0; transform: translateY(24px)` + transition（不用 animation-fill-mode: both paused）
 - `.is-visible` 触发 transition 到 `opacity: 1; translateY(0)`，同时重置 delay 确保 hover 即时
 - 首屏卡片 IntersectionObserver 立即触发（同步 fire），无闪现
+
+### 回退说明（commit faf43e0）
+
+`transition` 方案（`opacity: 0` + Observer → `is-visible` → `opacity: 1`）仍存在闪现问题：Observer 异步触发，首帧 opacity: 0 可见。
+
+最终方案：`cardReveal` animation + `animationDelay` stagger。滚动渐显归入 P2——需要 Observer 在 `useLayoutEffect`（paint 前）同步设置初始可见性来消除闪现。
