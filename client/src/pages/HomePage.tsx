@@ -152,7 +152,7 @@ export function HomePage() {
                   key={story.id}
                   to={`/story/${story.id}`}
                   className={cardClass}
-                  style={{ animationDelay: `${0.1 + i * 0.06}s`, transitionDelay: `${0.08 * i}s` }}
+                  style={{ animationDelay: `${0.1 + i * 0.06}s` }}
                 >
                   {story.cover_image ? (
                     <div className="card-cover">
