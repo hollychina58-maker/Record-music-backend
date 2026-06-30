@@ -44,7 +44,7 @@ export function HomePage() {
   const [onlyMine, setOnlyMine] = useState(false);
   const { t } = useLanguage();
   const geo = useGeo();
-  const revealRef = useScrollReveal<HTMLDivElement>();
+  const revealGridRef = useScrollReveal<HTMLDivElement>();
 
   const fetchStories = (mine: boolean) => {
     setLoading(true);
@@ -144,7 +144,7 @@ export function HomePage() {
             <Link to="/create" className="empty-link">{t('home.empty.link')}</Link>
           </div>
         ) : (
-          <div ref={revealRef} className="feed-grid feed-grid--bento reveal-on-scroll">
+          <div ref={revealGridRef} className="feed-grid feed-grid--bento reveal-on-scroll">
             {stories.map((story, i) => {
               const cardClass = `story-card${i === 0 ? ' story-card--hero' : ''}`;
               return (
@@ -152,7 +152,7 @@ export function HomePage() {
                   key={story.id}
                   to={`/story/${story.id}`}
                   className={cardClass}
-                  style={{ animationDelay: `${0.1 + i * 0.06}s` }}
+                  style={{ animationDelay: `${0.1 + i * 0.06}s`, transitionDelay: `${0.08 * i}s` }}
                 >
                   {story.cover_image ? (
                     <div className="card-cover">
