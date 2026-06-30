@@ -794,26 +794,36 @@
   }
 }
 
-/* ===== Hero Image ===== */
-.hero-image-wrap {
+/* ===== Hero with Image Background ===== */
+.hero--with-image {
+  background-size: cover;
+  background-position: center;
   position: relative;
-  max-width: var(--content-max-editorial);
-  margin: 0 auto var(--space-8);
-  padding: 0 var(--space-6);
-  text-align: center;
+  padding: 120px 24px 100px;
 }
 
-.hero-image {
-  width: 100%;
-  max-height: 400px;
-  object-fit: cover;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-float);
+.hero-image-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(245, 240, 232, 0.35) 0%,
+    rgba(245, 240, 232, 0.55) 60%,
+    rgba(245, 240, 232, 0.92) 100%
+  );
+  pointer-events: none;
 }
 
-.hero-image-admin {
+.hero-heading--overlay .hero-line1,
+.hero-heading--overlay .hero-line2 {
+  text-shadow: 0 2px 8px rgba(255,255,255,0.6);
+}
+
+.hero-admin {
   display: flex;
   gap: var(--space-2);
   justify-content: center;
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
+  position: relative;
+  z-index: 1;
 }

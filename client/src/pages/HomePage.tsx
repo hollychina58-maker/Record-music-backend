@@ -95,10 +95,11 @@ export function HomePage() {
 
   return (
     <div className="home-page">
-      <section className="hero">
+      <section className={`hero${heroImage ? ' hero--with-image' : ''}`} style={heroImage ? { backgroundImage: `url(${heroImage})` } : undefined}>
         <div className="hero-ink-splash" />
+        {heroImage && <div className="hero-image-overlay" />}
         <div className="hero-text">
-          <h1 className="hero-heading">
+          <h1 className={`hero-heading${heroImage ? ' hero-heading--overlay' : ''}`}>
             <span className="hero-line1">{t('home.hero.line1')}</span>
             <span className="hero-line2">{t('home.hero.line2')}</span>
           </h1>
@@ -106,36 +107,25 @@ export function HomePage() {
         <div className="hero-aside">
           <span className="hero-seal">墨</span>
         </div>
+        {user?.role === 'admin' && (
+          <div className="hero-admin">
+            {heroImage ? (
+              <>
+                <button className="filter-btn" onClick={async () => {
+                  try { await apiService.clientDelete('/admin/hero-image'); setHeroImage(null); } catch {}
+                }}>删除背景</button>
+                <button className="filter-btn" onClick={async () => {
+                  try { const d: any = await apiService.clientPost('/admin/hero-image/generate'); setHeroImage(d.data?.url || null); } catch {}
+                }}>重新生成</button>
+              </>
+            ) : (
+              <button className="filter-btn" onClick={async () => {
+                try { const d: any = await apiService.clientPost('/admin/hero-image/generate'); setHeroImage(d.data?.url || null); } catch {}
+              }}>生成水墨背景</button>
+            )}
+          </div>
+        )}
       </section>
-
-      {heroImage && (
-        <div className="hero-image-wrap">
-          <img src={heroImage} alt="" className="hero-image" />
-          {user?.role === 'admin' && (
-            <div className="hero-image-admin">
-              <button className="filter-btn" onClick={async () => {
-                try { await apiService.clientDelete('/admin/hero-image'); setHeroImage(null); } catch {}
-              }}>删除</button>
-              <button className="filter-btn" onClick={async () => {
-                try {
-                  const d: any = await apiService.clientPost('/admin/hero-image/generate');
-                  setHeroImage(d.data?.url || null);
-                } catch {}
-              }}>重新生成</button>
-            </div>
-          )}
-        </div>
-      )}
-      {!heroImage && user?.role === 'admin' && (
-        <div style={{ textAlign: 'center', padding: '12px' }}>
-          <button className="filter-btn" onClick={async () => {
-            try {
-              const d: any = await apiService.clientPost('/admin/hero-image/generate');
-              setHeroImage(d.data?.url || null);
-            } catch {}
-          }}>生成首页水墨画</button>
-        </div>
-      )}
 
       {isAuthenticated && (
         <div className="feed-filter">
