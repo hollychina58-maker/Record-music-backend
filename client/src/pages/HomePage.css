@@ -793,3 +793,27 @@
     margin-top: 20px;
   }
 }
+
+/* ===== Hero Image ===== */
+.hero-image-wrap {
+  position: relative;
+  max-width: var(--content-max-editorial);
+  margin: 0 auto var(--space-8);
+  padding: 0 var(--space-6);
+  text-align: center;
+}
+
+.hero-image {
+  width: 100%;
+  max-height: 400px;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+
+.hero-image-admin {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  margin-top: var(--space-3);
+}

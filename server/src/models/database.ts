@@ -225,6 +225,11 @@ CREATE TABLE IF NOT EXISTS blocked_users (
   FOREIGN KEY (blocked_id) REFERENCES users(id),
   UNIQUE(blocker_id, blocked_id)
 );
+
+CREATE TABLE IF NOT EXISTS site_config (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
 `;
 
 async function addColumnIfMissing(table: string, column: string, def: string): Promise<void> {

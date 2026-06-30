@@ -22,6 +22,7 @@ import adminUserRoutes from './routes/admin/users.js';
 import adminProductRoutes from './routes/admin/products.js';
 import adminCouponRoutes from './routes/admin/coupons.js';
 import adminOrderRoutes from './routes/admin/orders.js';
+import adminHeroRoutes from './routes/admin/hero.js';
 import followRoutes from './routes/follow.js';
 import notificationRoutes from './routes/notification.js';
 import messageRoutes from './routes/message.js';
@@ -116,6 +117,7 @@ app.use('/api/admin', adminUserRoutes);
 app.use('/api/admin', adminProductRoutes);
 app.use('/api/admin', adminCouponRoutes);
 app.use('/api/admin', adminOrderRoutes);
+app.use('/api/admin', adminHeroRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

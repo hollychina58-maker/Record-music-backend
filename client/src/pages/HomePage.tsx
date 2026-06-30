@@ -43,6 +43,12 @@ export function HomePage() {
   const [onlyMine, setOnlyMine] = useState(false);
   const { t } = useLanguage();
   const geo = useGeo();
+  const [heroImage, setHeroImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiService.clientGet('/admin/hero-image').then((d: any) => setHeroImage(d.data?.url || null)).catch(() => {});
+  }, []);
+
   const fetchStories = (mine: boolean) => {
     setLoading(true);
     setLoadError(false);
@@ -101,6 +107,35 @@ export function HomePage() {
           <span className="hero-seal">墨</span>
         </div>
       </section>
+
+      {heroImage && (
+        <div className="hero-image-wrap">
+          <img src={heroImage} alt="" className="hero-image" />
+          {user?.role === 'admin' && (
+            <div className="hero-image-admin">
+              <button className="filter-btn" onClick={async () => {
+                try { await apiService.clientDelete('/admin/hero-image'); setHeroImage(null); } catch {}
+              }}>删除</button>
+              <button className="filter-btn" onClick={async () => {
+                try {
+                  const d: any = await apiService.clientPost('/admin/hero-image/generate');
+                  setHeroImage(d.data?.url || null);
+                } catch {}
+              }}>重新生成</button>
+            </div>
+          )}
+        </div>
+      )}
+      {!heroImage && user?.role === 'admin' && (
+        <div style={{ textAlign: 'center', padding: '12px' }}>
+          <button className="filter-btn" onClick={async () => {
+            try {
+              const d: any = await apiService.clientPost('/admin/hero-image/generate');
+              setHeroImage(d.data?.url || null);
+            } catch {}
+          }}>生成首页水墨画</button>
+        </div>
+      )}
 
       {isAuthenticated && (
         <div className="feed-filter">
