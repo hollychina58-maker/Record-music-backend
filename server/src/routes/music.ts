@@ -32,7 +32,8 @@ async function processMusicAsync(
     ]);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown';
-    console.error('[Music] Async generation failed:', message);
+    console.error('[Music] Async generation failed for musicId', musicId, 'storyId', storyId, ':', message);
+    if (err instanceof Error && err.stack) console.error('[Music] Stack:', err.stack.split('\n').slice(0, 3).join('\n'));
     await dbRun("UPDATE music SET status = 'failed' WHERE id = ?", [musicId]);
     if (isSubscription && subscriptionId) {
       await dbRun('UPDATE subscriptions SET music_remaining = music_remaining + 1 WHERE id = ? AND music_remaining IS NOT NULL', [subscriptionId]);
@@ -159,7 +160,7 @@ router.get('/by-story/:storyId', optionalAuthMiddleware, async (req: AuthRequest
   // If file_path is NULL (expired CDN URL that couldn't regenerate), mark as 'expired'
   // so the client can show a "regenerate" prompt instead of a broken player.
   const records = await dbAll<any>(
-    "SELECT id, story_id, status, style, file_path, music_type, generation_params, created_at FROM music WHERE story_id = ? AND status != 'failed' ORDER BY created_at DESC",
+    "SELECT id, story_id, status, style, file_path, music_type, generation_params, created_at FROM music WHERE story_id = ? ORDER BY created_at DESC",
     [req.params.storyId]
   );
   const data = records.map(r => ({
