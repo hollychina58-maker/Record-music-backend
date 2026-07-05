@@ -17,6 +17,7 @@ function parseTags(raw: string | null): string[] | null {
 router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) => {
   const countryCode = req.query.countryCode as string | undefined;
   const onlyMine = req.query.onlyMine === 'true';
+  const tab = req.query.tab as string | undefined;  // 'following' = stories from followed authors
   const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
   const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '20'), 10)));
   const offset = (page - 1) * limit;
@@ -26,6 +27,9 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) 
 
   if (onlyMine && req.userId) {
     conditions.push('s.user_id = ?');
+    params.push(req.userId);
+  } else if (tab === 'following' && req.userId) {
+    conditions.push('s.user_id IN (SELECT followed_id FROM follows WHERE follower_id = ?)');
     params.push(req.userId);
   }
   // Note: countryCode filtering removed — on a small platform it hides too many stories.

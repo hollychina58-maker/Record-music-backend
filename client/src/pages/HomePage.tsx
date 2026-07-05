@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiService, Story } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -35,12 +35,14 @@ function MusicBadge({ status, type, isBurned }: { status: string | null; type: s
 }
 
 export function HomePage() {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
+  const [activeTab, setActiveTab] = useState<'discover' | 'following'>('discover');
   const { t } = useLanguage();
   const geo = useGeo();
   const [heroImage, setHeroImage] = useState<string | null>(null);
@@ -49,10 +51,10 @@ export function HomePage() {
     apiService.clientGet('/admin/hero-image').then((d: any) => setHeroImage(d.data?.url || null)).catch(() => {});
   }, []);
 
-  const fetchStories = (mine: boolean) => {
+  const fetchStories = (mine: boolean, tab?: 'discover' | 'following') => {
     setLoading(true);
     setLoadError(false);
-    const opts = mine ? { onlyMine: true } : { countryCode: geo.countryCode };
+    const opts = mine ? { onlyMine: true } : { countryCode: geo.countryCode, tab: tab || activeTab };
     apiService
       .getStories(opts)
       .then((data) => setStories(data))
@@ -79,19 +81,14 @@ export function HomePage() {
     const safetyTimer = setTimeout(() => {
       if (!cancelled) setLoading(false);
     }, 8000);
-    const opts = onlyMine ? { onlyMine: true } : { countryCode: geo.countryCode };
+    const opts = onlyMine ? { onlyMine: true } : { countryCode: geo.countryCode, tab: activeTab };
     apiService
       .getStories(opts)
       .then((data) => { if (!cancelled) { clearTimeout(safetyTimer); setStories(data); } })
       .catch(() => { if (!cancelled) { clearTimeout(safetyTimer); setLoadError(true); } })
       .finally(() => { if (!cancelled) { clearTimeout(safetyTimer); setLoading(false); } });
     return () => { cancelled = true; clearTimeout(safetyTimer); };
-  }, [geo.countryCode, onlyMine]);
-
-  const handleOnlyMineToggle = () => {
-    if (!isAuthenticated) return;
-    setOnlyMine((v) => !v);
-  };
+  }, [geo.countryCode, onlyMine, activeTab]);
 
   return (
     <div className="home-page">
@@ -127,17 +124,33 @@ export function HomePage() {
         )}
       </section>
 
-      {isAuthenticated && (
-        <div className="feed-filter">
+      <div className="feed-tabs">
+        <div className="feed-tabs-bar">
           <button
-            type="button"
+            className={`feed-tab${activeTab === 'discover' ? ' feed-tab--active' : ''}`}
+            onClick={() => { setActiveTab('discover'); setOnlyMine(false); }}
+          >
+            {t('home.tab.discover')}
+          </button>
+          <button
+            className={`feed-tab${activeTab === 'following' ? ' feed-tab--active' : ''}`}
+            onClick={() => {
+              if (!isAuthenticated) { navigate('/login'); return; }
+              setActiveTab('following'); setOnlyMine(false);
+            }}
+          >
+            {t('home.tab.following')}
+          </button>
+        </div>
+        {isAuthenticated && (
+          <button
             className={`filter-btn${onlyMine ? ' filter-btn--active' : ''}`}
-            onClick={handleOnlyMineToggle}
+            onClick={() => { setOnlyMine(!onlyMine); if (!onlyMine) setActiveTab('discover'); }}
           >
             {onlyMine ? t('home.filter.myStories') : t('home.filter.mine')}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       <main className="feed">
         {loading ? (

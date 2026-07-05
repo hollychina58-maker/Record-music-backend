@@ -62,7 +62,7 @@ export function StoryDetailPage() {
           description: story.content.slice(0, 160) + (story.content.length > 160 ? '…' : ''),
           ogTitle: story.title,
           ogDescription: story.content.slice(0, 160),
-          ogImage: 'https://ustory-umusic.com/icon-512.png',
+          ogImage: story.cover_image || 'https://ustory-umusic.com/icon-512.png',
           canonical: `https://ustory-umusic.com/story/${story.id}`,
           jsonLd: {
             '@context': 'https://schema.org',
