@@ -34,12 +34,18 @@ export function useSeo(props: SeoProps) {
       el.setAttribute('content', content);
     };
 
+    setMeta('twitter:card', 'summary_large_image');
+
     if (props.description) {
       setMeta('description', props.description);
       setMeta('og:description', props.description, true);
+      setMeta('twitter:description', props.description);
     }
     if (props.ogTitle) setMeta('og:title', props.ogTitle, true);
-    if (props.ogImage) setMeta('og:image', props.ogImage, true);
+    if (props.ogImage) {
+      setMeta('og:image', props.ogImage, true);
+      setMeta('twitter:image', props.ogImage);
+    }
     if (props.canonical) {
       let el = document.querySelector('link[rel="canonical"]');
       if (!el) {
