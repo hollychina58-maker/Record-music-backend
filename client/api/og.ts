@@ -13,11 +13,10 @@ export default async function handler(req: Request) {
     return new Response(spaHtml.body, { headers: { 'Content-Type': 'text/html' } });
   }
 
-  const storyMatch = url.pathname.match(/\/story\/(\d+)/);
-  if (!storyMatch) return new Response(null, { status: 404 });
+  const storyId = url.searchParams.get('id');
+  if (!storyId) return new Response(null, { status: 404 });
 
   try {
-    const storyId = storyMatch[1];
     const storyRes = await fetch(`https://ustory-umusic.com/api/story/${storyId}`);
     if (!storyRes.ok) return new Response(null, { status: 404 });
     const { data: story } = await storyRes.json() as any;

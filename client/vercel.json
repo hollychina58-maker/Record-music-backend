@@ -4,7 +4,7 @@
   "devCommand": "npm run dev",
   "framework": "vite",
   "rewrites": [
-    { "source": "/story/:id", "destination": "/api/og" },
+    { "source": "/story/:id", "destination": "/api/og?id=$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
