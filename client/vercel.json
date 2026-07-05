@@ -3,13 +3,8 @@
   "outputDirectory": "dist",
   "devCommand": "npm run dev",
   "framework": "vite",
-  "functions": {
-    "api/og.ts": { "runtime": "edge" }
-  },
   "rewrites": [
-    { "source": "/story/:id", "has": [
-      { "type": "header", "key": "user-agent", "value": "(?i).*(twitterbot|facebookexternalhit|slack|linkedinbot|discord|whatsapp|telegrambot).*" }
-    ], "destination": "/api/og" },
+    { "source": "/story/:id", "destination": "/api/og" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
