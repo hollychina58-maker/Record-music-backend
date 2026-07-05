@@ -37,20 +37,38 @@ export function NotificationBell() {
     markAllRead();
   };
 
+  const notifLabel = (n: { type: string; actor_nickname?: string | null }): string => {
+    const name = n.actor_nickname || '';
+    switch (n.type) {
+      case 'like_story': return name + ' ' + t('notif.likedStory');
+      case 'comment_story': return name + ' ' + t('notif.commentedStory');
+      case 'follow': return name + ' ' + t('notif.followedYou');
+      case 'new_story': return t('notif.newStory', { author: name, title: '' });
+      case 'new_message': return t('notif.newMessage', { from: name });
+      default: return name;
+    }
+  };
+
   const handleClick = async (n: { id: number; type: string; source_id: number; actor_id?: number | null; is_read: number }) => {
     if (!n.is_read) {
       await apiService.clientPost('/notifications/' + n.id + '/read').catch(() => {});
       markRead(n.id);
     }
     setOpen(false);
-    const target = n.type === 'new_story'
-      ? '/story/' + n.source_id
-      : '/messages/' + (n.actor_id || n.source_id);
+    let target: string;
+    switch (n.type) {
+      case 'new_story': target = '/story/' + n.source_id; break;
+      case 'like_story': target = '/story/' + n.source_id; break;
+      case 'comment_story': target = '/story/' + n.source_id; break;
+      case 'follow': target = '/user/' + (n.actor_id || n.source_id); break;
+      case 'new_message': target = '/messages/' + (n.actor_id || n.source_id); break;
+      default: target = '/story/' + n.source_id;
+    }
     navigate(target);
   };
 
   const filtered = tab === 'stories'
-    ? notifications.filter(n => n.type === 'new_story')
+    ? notifications.filter(n => ['new_story', 'like_story', 'comment_story', 'follow'].includes(n.type))
     : notifications.filter(n => n.type === 'new_message');
 
   const formatTime = (ts: string): string => {
@@ -96,10 +114,7 @@ export function NotificationBell() {
                   onClick={() => handleClick(n)}
                 >
                   {!n.is_read && <span className="notif-dot" />}
-                  <span className="notif-text">
-                    {n.type === 'new_story'
-                      ? t('notif.newStory', { author: n.actor_nickname || '', title: '' })
-                      : t('notif.newMessage', { from: n.actor_nickname || '' })}
+                  <span className="notif-text">{notifLabel(n)}
                   </span>
                   <span className="notif-time">{formatTime(n.created_at)}</span>
                 </button>

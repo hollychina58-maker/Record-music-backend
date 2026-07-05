@@ -34,6 +34,17 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     await dbRun(`UPDATE ${table} SET like_count = like_count + 1 WHERE id = ?`, [targetId]);
     const updated = await dbGet<{ like_count: number }>(`SELECT like_count FROM ${table} WHERE id = ?`, [targetId]);
     res.json({ liked: true, likeCount: updated?.like_count ?? 0 });
+
+    // Notify story author (async, fire-and-forget)
+    if (targetType === 'story') {
+      setImmediate(async () => {
+        const storyRow = await dbGet<{ user_id: number; title: string }>('SELECT user_id, title FROM stories WHERE id = ?', [targetId]);
+        if (storyRow && storyRow.user_id !== userId) {
+          await dbRun('INSERT INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
+            [storyRow.user_id, 'like_story', targetId, userId]);
+        }
+      });
+    }
   }
 });
 
