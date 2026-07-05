@@ -36,6 +36,7 @@ export function ShareButton({ storyId, storyTitle, storyTags, disabled }: ShareB
   const { t } = useLanguage();
   const [showPanel, setShowPanel] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
+  const [coverImage, setCoverImage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [wechatCopied, setWechatCopied] = useState(false);
 
@@ -56,6 +57,7 @@ export function ShareButton({ storyId, storyTitle, storyTags, disabled }: ShareB
       const { apiService } = await import('../services/api');
       const data = await apiService.shareStory(storyId);
       setShareLink(data.shareLink);
+      setCoverImage((data as any).coverImage || null);
       setShowPanel(true);
     } catch (error) {
       console.error('Failed to generate share link', error);
@@ -164,7 +166,12 @@ export function ShareButton({ storyId, storyTitle, storyTags, disabled }: ShareB
               </svg>
             </button>
 
-            {/* 故事标题 + 标签预览 */}
+            {/* 封面缩略图 + 标题预览 */}
+            {coverImage && (
+              <div className="share-cover-wrap">
+                <img src={coverImage} alt="" className="share-cover-thumb" />
+              </div>
+            )}
             <div className="share-preview">
               <p className="share-preview-title">{storyTitle}</p>
               {tagText && <p className="share-preview-tags">{tagText}</p>}
