@@ -58,12 +58,10 @@ export const useAudioManager = create<AudioState>((set, get) => ({
 
     try {
       const token = useAuthStore.getState().token;
-      let url = streamUrl;
-      if (token) {
-        const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        const blob = await resp.blob();
-        url = URL.createObjectURL(blob);
-      }
+      // Stream directly — browser buffers and plays immediately (no blob download-first)
+      const url = token
+        ? `${streamUrl}${streamUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+        : streamUrl;
 
       audio = createAudio(url);
       audio.addEventListener('loadedmetadata', () => set({ duration: audio?.duration || 0 }));
