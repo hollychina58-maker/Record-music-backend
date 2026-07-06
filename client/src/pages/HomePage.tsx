@@ -43,12 +43,15 @@ export function HomePage() {
   const [loadError, setLoadError] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
   const [activeTab, setActiveTab] = useState<'discover' | 'following'>('discover');
+  const [activeTag, setActiveTag] = useState('');
+  const [popularTags, setPopularTags] = useState<{ tag: string; count: number }[]>([]);
   const { t } = useLanguage();
   const geo = useGeo();
   const [heroImage, setHeroImage] = useState<string | null>(null);
 
   useEffect(() => {
     apiService.clientGet('/admin/hero-image').then((d: any) => setHeroImage(d.data?.url || null)).catch(() => {});
+    apiService.clientGet('/story/tags').then((d: any) => setPopularTags(d.data || [])).catch(() => {});
   }, []);
 
   const fetchStories = (mine: boolean, tab?: 'discover' | 'following') => {
@@ -81,14 +84,14 @@ export function HomePage() {
     const safetyTimer = setTimeout(() => {
       if (!cancelled) setLoading(false);
     }, 8000);
-    const opts = onlyMine ? { onlyMine: true } : { countryCode: geo.countryCode, tab: activeTab };
+    const opts = onlyMine ? { onlyMine: true } : { countryCode: geo.countryCode, tab: activeTab, tag: activeTag || undefined };
     apiService
       .getStories(opts)
       .then((data) => { if (!cancelled) { clearTimeout(safetyTimer); setStories(data); } })
       .catch(() => { if (!cancelled) { clearTimeout(safetyTimer); setLoadError(true); } })
       .finally(() => { if (!cancelled) { clearTimeout(safetyTimer); setLoading(false); } });
     return () => { cancelled = true; clearTimeout(safetyTimer); };
-  }, [geo.countryCode, onlyMine, activeTab]);
+  }, [geo.countryCode, onlyMine, activeTab, activeTag]);
 
   return (
     <div className="home-page">
@@ -151,6 +154,19 @@ export function HomePage() {
           </button>
         )}
       </div>
+
+      {activeTab === 'discover' && popularTags.length > 0 && (
+        <div className="tag-bar">
+          <button className={`tag-chip${activeTag === '' ? ' tag-chip--active' : ''}`} onClick={() => setActiveTag('')}>
+            {t('home.tag.all')}
+          </button>
+          {popularTags.map(t => (
+            <button key={t.tag} className={`tag-chip${activeTag === t.tag ? ' tag-chip--active' : ''}`} onClick={() => setActiveTag(t.tag)}>
+              {t.tag}
+            </button>
+          ))}
+        </div>
+      )}
 
       <main className="feed">
         {loading ? (

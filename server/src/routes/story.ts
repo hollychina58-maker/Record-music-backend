@@ -17,6 +17,7 @@ function parseTags(raw: string | null): string[] | null {
 router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) => {
   const countryCode = req.query.countryCode as string | undefined;
   const onlyMine = req.query.onlyMine === 'true';
+  const tag = req.query.tag as string | undefined;
   const tab = req.query.tab as string | undefined;  // 'following' = stories from followed authors
   const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
   const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '20'), 10)));
@@ -25,7 +26,10 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) 
   const conditions: string[] = ['bs.story_id IS NULL'];
   const params: unknown[] = [];
 
-  if (onlyMine && req.userId) {
+  if (tag) {
+    conditions.push("s.tags LIKE ?");
+    params.push(`%"${tag}"%`);
+  } else if (onlyMine && req.userId) {
     conditions.push('s.user_id = ?');
     params.push(req.userId);
   } else if (tab === 'following' && req.userId) {
@@ -64,6 +68,45 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) 
     tags: parseTags(s.tags),
   }));
   res.json({ data: parsed, meta: { page, limit, total } });
+});
+
+// ── Tag aggregation ──
+router.get('/story/tags', async (_req: Request, res: Response) => {
+  // Tags stored as JSON arrays — use json_each to extract individual tags
+  const rows = await dbAll<{ tag: string; count: number }>(
+    `SELECT j.value as tag, COUNT(*) as count
+     FROM stories s, json_each(s.tags) j
+     WHERE s.tags IS NOT NULL AND s.tags != '[]'
+     GROUP BY j.value ORDER BY count DESC LIMIT 15`
+  );
+  res.json({ data: rows });
+});
+
+// ── Search ──
+router.get('/story/search', async (req: Request, res: Response) => {
+  const q = (req.query.q as string || '').trim();
+  if (q.length < 2) { res.json({ data: [], meta: { q, total: 0 } }); return; }
+  const limit = Math.min(20, parseInt(String(req.query.limit || '10'), 10));
+  const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
+  const offset = (page - 1) * limit;
+
+  const like = `%${q}%`;
+  const stories = await dbAll<any>(
+    `SELECT s.*, u.nickname as author_nickname,
+            (SELECT COUNT(*) FROM comments WHERE story_id = s.id) as comment_count,
+            (SELECT status FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_status
+     FROM stories s
+     LEFT JOIN users u ON s.user_id = u.id
+     LEFT JOIN burned_stories bs ON s.id = bs.story_id
+     WHERE bs.story_id IS NULL AND (s.title LIKE ? OR s.content LIKE ?)
+     ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
+    [like, like, limit, offset]
+  );
+  const totalRow = await dbGet<{ cnt: number }>(
+    `SELECT COUNT(*) as cnt FROM stories s LEFT JOIN burned_stories bs ON s.id = bs.story_id
+     WHERE bs.story_id IS NULL AND (s.title LIKE ? OR s.content LIKE ?)`, [like, like]
+  );
+  res.json({ data: stories.map((s: any) => ({ ...s, tags: parseTags(s.tags) })), meta: { q, page, limit, total: totalRow?.cnt ?? 0 } });
 });
 
 router.get('/:id', async (req: Request, res: Response) => {
