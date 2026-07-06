@@ -28,6 +28,19 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
   const BARS = 24;
   const barArray = Array.from({ length: BARS }, (_, i) => i);
 
+  // Sync with audioManager state when using shared audio
+  useEffect(() => {
+    if (musicId == null) return;
+    const unsub = useAudioManager.subscribe((s) => {
+      if (s.activeMusicId === musicId) {
+        setIsPlaying(s.isPlaying);
+        setCurrentTime(s.currentTime);
+        setDuration(s.duration);
+      }
+    });
+    return unsub;
+  }, [musicId]);
+
   useEffect(() => {
     const globalAudio = useAudioManager.getState().getAudio();
     const globalMusicId = useAudioManager.getState().activeMusicId;
@@ -148,20 +161,24 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
     if (!audio) return;
 
     if (isPlaying) {
-      audio.pause();
+      // Use audioManager for shared audio
+      if (musicId != null) {
+        useAudioManager.getState().pause();
+      } else {
+        audio.pause();
+        cancelAnimationFrame(visRafRef.current);
+      }
       setIsPlaying(false);
-      cancelAnimationFrame(visRafRef.current);
     } else {
       setPlayError(false);
-      if (audio.readyState === 0) audio.load();
-      // Resume AudioContext after user gesture (autoplay policy)
-      audioCtxRef.current?.resume();
-      audio.play().then(() => {
-        setIsPlaying(true);
-        initVisualizer(audio);
-      }).catch(() => {
-        // iOS Safari autoplay block — onError will handle if it's a real error
-      });
+      // Route through audioManager for shared state (stops any other card's audio)
+      if (musicId != null) {
+        useAudioManager.getState().play(musicId, audioUrl).catch(() => {});
+      } else {
+        if (audio.readyState === 0) audio.load();
+        audioCtxRef.current?.resume();
+        audio.play().then(() => { setIsPlaying(true); initVisualizer(audio); }).catch(() => {});
+      }
     }
   };
 
