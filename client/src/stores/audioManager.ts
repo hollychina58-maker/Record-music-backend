@@ -64,6 +64,7 @@ export const useAudioManager = create<AudioState>((set, get) => ({
         : streamUrl;
 
       audio = createAudio(url);
+      audio.load(); // Force browser to start fetching before play()
       audio.addEventListener('loadedmetadata', () => set({ duration: audio?.duration || 0 }));
       audio.addEventListener('ended', () => set({ isPlaying: false, activeMusicId: null }));
       audio.addEventListener('error', () => {
@@ -79,6 +80,13 @@ export const useAudioManager = create<AudioState>((set, get) => ({
         }
       };
 
+      // Wait for audio to be ready before playing (prevents silent first-click)
+      if (audio.readyState < 2) {
+        await new Promise<void>((resolve, reject) => {
+          audio.addEventListener('canplay', () => resolve(), { once: true });
+          audio.addEventListener('error', () => reject(), { once: true });
+        });
+      }
       await audio.play();
       set({ activeMusicId: musicId, isPlaying: true, currentTime: 0, duration: audio?.duration || 0 });
       timeRaf = requestAnimationFrame(tick);
