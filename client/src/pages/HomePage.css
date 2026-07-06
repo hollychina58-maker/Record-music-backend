@@ -925,3 +925,48 @@
   border-color: var(--ink-dark);
   color: #fff;
 }
+
+/* ===== Card Player ===== */
+.card-player {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 24px 16px;
+  border-top: 1px solid rgba(28,28,28,0.04);
+}
+
+.card-play-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-faint);
+  background: transparent;
+  color: var(--ink-medium);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s var(--ease-out-expo);
+}
+
+.card-play-btn:hover {
+  border-color: var(--ink-dark);
+  color: var(--ink-dark);
+}
+
+.card-progress-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--paper-aged);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.card-progress-fill {
+  height: 100%;
+  background: var(--ink-dark);
+  border-radius: 2px;
+  transition: width 0.3s linear;
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiService, Story } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { useAudioManager } from '../stores/audioManager';
 import { useLanguage } from '../i18n/LanguageContext';
 import { StoryPoster } from '../components/StoryPoster';
 import { useGeo } from '../hooks/useGeo';
@@ -32,6 +33,26 @@ function MusicBadge({ status, type, isBurned }: { status: string | null; type: s
   }
   if (type === 'song') return <span className="music-badge music-badge--song">♫ {t('home.music.song')}</span>;
   return <span className="music-badge music-badge--music">♪ {t('home.music.music')}</span>;
+}
+
+function CardPlayer({ storyId }: { storyId: number }) {
+  const { activeMusicId, isPlaying, currentTime, duration, play } = useAudioManager();
+  const isThisActive = activeMusicId === storyId;
+  const streamUrl = `${import.meta.env.VITE_API_URL || ''}/api/music/${storyId}/stream`;
+  const progress = isThisActive && duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  return (
+    <div className="card-player" onClick={e => { e.preventDefault(); e.stopPropagation(); }}>
+      <button className="card-play-btn" onClick={() => play(storyId, streamUrl)} aria-label={isThisActive && isPlaying ? '暂停' : '播放'}>
+        {isThisActive && isPlaying ? '❚❚' : '▶'}
+      </button>
+      {isThisActive && (
+        <div className="card-progress-bar">
+          <div className="card-progress-fill" style={{ width: `${progress}%` }} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function HomePage() {
@@ -247,6 +268,9 @@ export function HomePage() {
                         <span className="card-read">&rarr; {t('home.card.read')}</span>
                       </div>
                     </div>
+                    {story.music_status === 'completed' && (
+                      <CardPlayer storyId={story.id} />
+                    )}
                   </div>
                 </Link>
               );
