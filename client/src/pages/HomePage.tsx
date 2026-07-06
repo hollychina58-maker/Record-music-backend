@@ -35,15 +35,15 @@ function MusicBadge({ status, type, isBurned }: { status: string | null; type: s
   return <span className="music-badge music-badge--music">♪ {t('home.music.music')}</span>;
 }
 
-function CardPlayer({ storyId }: { storyId: number }) {
+function CardPlayer({ musicId }: { musicId: number }) {
   const { activeMusicId, isPlaying, currentTime, duration, play } = useAudioManager();
-  const isThisActive = activeMusicId === storyId;
-  const streamUrl = `${import.meta.env.VITE_API_URL || ''}/api/music/${storyId}/stream`;
+  const isThisActive = activeMusicId === musicId;
+  const streamUrl = `${import.meta.env.VITE_API_URL || ''}/api/music/${musicId}/stream`;
   const progress = isThisActive && duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <div className="card-player" onClick={e => { e.preventDefault(); e.stopPropagation(); }}>
-      <button className="card-play-btn" onClick={() => play(storyId, streamUrl)} aria-label={isThisActive && isPlaying ? '暂停' : '播放'}>
+      <button className="card-play-btn" onClick={() => play(musicId, streamUrl)} aria-label={isThisActive && isPlaying ? '暂停' : '播放'}>
         {isThisActive && isPlaying ? '❚❚' : '▶'}
       </button>
       {isThisActive && (
@@ -268,8 +268,8 @@ export function HomePage() {
                         <span className="card-read">&rarr; {t('home.card.read')}</span>
                       </div>
                     </div>
-                    {story.music_status === 'completed' && (
-                      <CardPlayer storyId={story.id} />
+                    {story.music_status === 'completed' && story.music_id && (
+                      <CardPlayer musicId={story.music_id} />
                     )}
                   </div>
                 </Link>

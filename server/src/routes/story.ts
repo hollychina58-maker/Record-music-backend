@@ -46,6 +46,8 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) 
     SELECT s.*,
            (SELECT COUNT(*) FROM comments WHERE story_id = s.id) as comment_count,
            (SELECT nickname FROM users WHERE id = s.user_id) as author_nickname,
+           (SELECT id FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_id,
+           (SELECT id FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_id,
            (SELECT status FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_status,
            (SELECT music_type FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_type
     FROM stories s

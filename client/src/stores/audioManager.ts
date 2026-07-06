@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useAuthStore } from './authStore';
 
 interface AudioState {
   activeMusicId: number | null;
@@ -54,7 +55,7 @@ export const useAudioManager = create<AudioState>((set, get) => ({
     stopCurrent();
 
     try {
-      const token = (window as any).__authToken;
+      const token = useAuthStore.getState().token;
       let url = streamUrl;
       if (token) {
         const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -79,7 +80,7 @@ export const useAudioManager = create<AudioState>((set, get) => ({
       };
 
       await audio.play();
-      set({ activeMusicId: musicId, isPlaying: true, currentTime: 0, duration: audio.duration || 0 });
+      set({ activeMusicId: musicId, isPlaying: true, currentTime: 0, duration: audio?.duration || 0 });
       timeRaf = requestAnimationFrame(tick);
     } catch {
       // autoplay blocked or network error — silently ignore

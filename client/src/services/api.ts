@@ -18,6 +18,7 @@ export interface Story {
   tags: string[] | null;
   tone: string | null;
   author_nickname: string | null;
+  music_id: number | null;
   music_status: 'pending' | 'completed' | 'failed' | null;
   music_type: 'instrumental' | 'song' | null;
   cover_image: string | null;
