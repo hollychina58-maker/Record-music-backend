@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { useAudioManager } from '../stores/audioManager';
 import { useLanguage } from '../i18n/LanguageContext';
 import './MusicPlayer.css';
 
@@ -28,28 +29,39 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
   const barArray = Array.from({ length: BARS }, (_, i) => i);
 
   useEffect(() => {
-    const token = useAuthStore.getState().token;
-    const audio = new Audio();
-    // Mobile: preload metadata only to save bandwidth; desktop: full preload
-    const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent);
-    audio.preload = isMobile ? 'metadata' : 'auto';
+    const globalAudio = useAudioManager.getState().getAudio();
+    const globalMusicId = useAudioManager.getState().activeMusicId;
+    const isShared = musicId != null && globalMusicId === musicId && globalAudio;
+
+    // Use shared audio from audioManager if this music is already playing
+    const audio = isShared ? globalAudio : new Audio();
+    const controller = isShared ? null : new AbortController();
     audioRef.current = audio;
 
-    // Use fetch + Blob to avoid leaking JWT in URL query params (Audio() doesn't support headers)
-    const controller = new AbortController();
-    if (token) {
-      fetch(audioUrl, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
-        .then(r => r.blob())
-        .then(blob => { if (!controller.signal.aborted) { audio.src = URL.createObjectURL(blob); audio.load(); } })
-        .catch(() => { if (!controller.signal.aborted) setPlayError('network'); });
+    if (isShared) {
+      // Sync state from existing playing audio
+      if (audio.duration && !isNaN(audio.duration)) setDuration(audio.duration);
+      setCurrentTime(audio.currentTime);
+      setIsPlaying(!audio.paused);
+      setPlayError(false);
     } else {
-      audio.src = audioUrl;
-      audio.load();
+      const token = useAuthStore.getState().token;
+      const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent);
+      audio.preload = isMobile ? 'metadata' : 'auto';
+
+      if (token) {
+        fetch(audioUrl, { headers: { Authorization: `Bearer ${token}` }, signal: controller!.signal })
+          .then(r => r.blob())
+          .then(blob => { if (controller && !controller.signal.aborted) { audio.src = URL.createObjectURL(blob); audio.load(); } })
+          .catch(() => { if (controller && !controller.signal.aborted) setPlayError('network'); });
+      } else {
+        audio.src = audioUrl;
+        audio.load();
+      }
     }
 
     const onLoaded = () => setDuration(audio.duration || 0);
     const onDurationChange = () => { if (audio.duration && !isNaN(audio.duration)) setDuration(audio.duration); };
-    // Throttle timeupdate via rAF — avoid excessive re-renders on mobile
     let ticking = false;
     const onTime = () => {
       if (!ticking) {
@@ -63,15 +75,13 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
     const onEnd = () => setIsPlaying(false);
     const onError = () => {
       const err = audio.error;
-      // code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED，通常是 CDN 链接过期（404/403）
       setPlayError(err?.code === 4 ? 'expired' : 'network');
       setIsPlaying(false);
     };
     const onCanPlay = () => { setPlayError(false as const); };
     const onStalled = () => {};
 
-    // iOS Safari: load() required before play() for dynamically-set src
-    audio.load();
+    if (!isShared) audio.load();
 
     audio.addEventListener('loadedmetadata', onLoaded);
     audio.addEventListener('durationchange', onDurationChange);
@@ -86,9 +96,12 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
       cancelAnimationFrame(visRafRef.current);
       audioCtxRef.current?.close().catch(() => {});
       audioCtxRef.current = null;
-      controller.abort();
-      audio.pause();
-      if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
+      controller?.abort();
+      // Don't stop shared audio — it's managed by audioManager
+      if (!isShared) {
+        audio.pause();
+        if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
+      }
       audio.removeEventListener('loadedmetadata', onLoaded);
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('timeupdate', onTime);
