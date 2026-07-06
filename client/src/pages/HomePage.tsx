@@ -40,15 +40,21 @@ function CardPlayer({ musicId }: { musicId: number }) {
   const isThisActive = activeMusicId === musicId;
   const streamUrl = `${import.meta.env.VITE_API_URL || ''}/api/music/${musicId}/stream`;
   const progress = isThisActive && duration > 0 ? (currentTime / duration) * 100 : 0;
+  const vizBars = Array.from({ length: 6 }, (_, i) => i);
 
   return (
     <div className="card-player" onClick={e => { e.preventDefault(); e.stopPropagation(); }}>
       <button className="card-play-btn" onClick={() => play(musicId, streamUrl)} aria-label={isThisActive && isPlaying ? '暂停' : '播放'}>
         {isThisActive && isPlaying ? '❚❚' : '▶'}
       </button>
-      {isThisActive && (
-        <div className="card-progress-bar">
-          <div className="card-progress-fill" style={{ width: `${progress}%` }} />
+      <div className="card-progress-bar">
+        <div className="card-progress-fill" style={{ width: `${progress}%` }} />
+      </div>
+      {isThisActive && isPlaying && (
+        <div className="card-viz" aria-hidden="true">
+          {vizBars.map(i => (
+            <span key={i} className="card-viz-bar" style={{ animationDelay: `${i * 0.12}s` }} />
+          ))}
         </div>
       )}
     </div>

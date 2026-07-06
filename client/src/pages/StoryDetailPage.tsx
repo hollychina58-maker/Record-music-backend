@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiService, Story } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
+import { useAudioManager } from '../stores/audioManager';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useToast } from '../components/Toast';
 import { useSeo } from '../hooks/useSeo';
@@ -153,6 +154,8 @@ export function StoryDetailPage() {
   };
 
   useEffect(() => {
+    // Stop any card player audio when entering detail page
+    useAudioManager.getState().stop();
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);

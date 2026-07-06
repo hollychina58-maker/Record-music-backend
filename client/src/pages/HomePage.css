@@ -970,3 +970,25 @@
   border-radius: 2px;
   transition: width 0.3s linear;
 }
+
+.card-viz {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+  margin-left: var(--space-1);
+}
+
+.card-viz-bar {
+  width: 3px;
+  background: var(--ink-wash);
+  border-radius: 1px;
+  animation: vizPulse 0.6s ease-in-out infinite alternate;
+}
+.card-viz-bar:nth-child(odd) { animation-duration: 0.5s; }
+.card-viz-bar:nth-child(even) { animation-duration: 0.7s; }
+
+@keyframes vizPulse {
+  from { height: 3px; opacity: 0.4; }
+  to   { height: 14px; opacity: 1; }
+}

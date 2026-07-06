@@ -8,7 +8,9 @@ interface AudioState {
   duration: number;
   play: (musicId: number, streamUrl: string) => Promise<void>;
   pause: () => void;
+  stop: () => void;
   setTime: (t: number) => void;
+  getAudio: () => HTMLAudioElement | null;
 }
 
 let audio: HTMLAudioElement | null = null;
@@ -99,4 +101,11 @@ export const useAudioManager = create<AudioState>((set, get) => ({
     if (audio) audio.currentTime = t;
     set({ currentTime: t });
   },
+
+  stop: () => {
+    stopCurrent();
+    set({ activeMusicId: null, isPlaying: false, currentTime: 0, duration: 0 });
+  },
+
+  getAudio: () => audio,
 }));
