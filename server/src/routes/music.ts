@@ -63,24 +63,38 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
     let subscriptionId: number | null = null;
 
     // Step 1: Check dedup FIRST — before any credit deduction or AI analysis
-    const existing = await dbGet<{ id: number; status: string; file_path: string | null }>(
-      "SELECT id, status, file_path FROM music WHERE story_id = ? AND status IN ('pending', 'completed') AND (file_path IS NOT NULL OR status = 'pending') ORDER BY created_at DESC LIMIT 1",
+    const existing = await dbGet<{ id: number; status: string; file_path: string | null; created_at: string }>(
+      "SELECT id, status, file_path, created_at FROM music WHERE story_id = ? AND status IN ('pending', 'completed') AND (file_path IS NOT NULL OR status = 'pending') ORDER BY created_at DESC LIMIT 1",
       [storyId]
     );
 
     if (existing) {
-      console.log('[Music] Reusing existing music record', existing.id, 'status:', existing.status, '— no credit deducted, no AI call');
-      // Calculate remaining counts without deducting
-      const subRemaining = subscription
-        ? (await dbGet<{ music_remaining: number | null }>('SELECT music_remaining FROM subscriptions WHERE id = ?', [subscription.id]))?.music_remaining
-        : null;
-      const userCount = !subscription
-        ? (await dbGet<{ free_music_count: number }>('SELECT free_music_count FROM users WHERE id = ?', [userId]))?.free_music_count
-        : null;
-      res.status(202).json({
-        data: { musicId: existing.id, status: existing.status, subscriptionRemaining: subRemaining ?? null, freeMusicCount: userCount ?? null },
-      });
-      return;
+      // Stale pending (>3 min old) = abandoned generation — don't reuse, retry instead
+      const isStale = existing.status === 'pending'
+        && (Date.now() - new Date(existing.created_at + 'Z').getTime()) > 180000;
+      if (isStale) {
+        console.log('[Music] Stale pending record', existing.id, '— resetting for retry');
+        await dbRun("UPDATE music SET status = 'failed' WHERE id = ?", [existing.id]);
+        // Refund the credit from the abandoned attempt
+        if (subscription && subscription.music_remaining !== null) {
+          await dbRun('UPDATE subscriptions SET music_remaining = music_remaining + 1 WHERE id = ? AND music_remaining IS NOT NULL', [subscription.id]);
+        } else if (!subscription) {
+          await dbRun('UPDATE users SET free_music_count = free_music_count + 1 WHERE id = ?', [userId]);
+        }
+        // Fall through to create new record
+      } else {
+        console.log('[Music] Reusing existing music record', existing.id, 'status:', existing.status, '— no credit deducted, no AI call');
+        const subRemaining = subscription
+          ? (await dbGet<{ music_remaining: number | null }>('SELECT music_remaining FROM subscriptions WHERE id = ?', [subscription.id]))?.music_remaining
+          : null;
+        const userCount = !subscription
+          ? (await dbGet<{ free_music_count: number }>('SELECT free_music_count FROM users WHERE id = ?', [userId]))?.free_music_count
+          : null;
+        res.status(202).json({
+          data: { musicId: existing.id, status: existing.status, subscriptionRemaining: subRemaining ?? null, freeMusicCount: userCount ?? null },
+        });
+        return;
+      }
     }
 
     // Step 2: AI analysis — only run when we actually need to create new music

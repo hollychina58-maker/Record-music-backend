@@ -325,7 +325,7 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
   payload.prompt = prompt;
 
   // Longer timeout for longer music (120s may need 3-4 min during peak)
-  const timeout = durationSec <= 60 ? 120000 : 240000;
+  const timeout = durationSec <= 30 ? 120000 : 180000;
 
   const response = await axios.post<MiniMaxMusicResponse>(
     `${process.env.MINIMAX_API_URL || 'https://api.minimaxi.com/v1'}/music_generation`,
