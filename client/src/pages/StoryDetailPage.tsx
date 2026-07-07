@@ -112,7 +112,7 @@ export function StoryDetailPage() {
     } catch { /* ignore */ }
   };
 
-  const POLL_TIMEOUT = 300000; // 5 min — Render deploy restarts kill fire-and-forget processMusicAsync
+  const POLL_TIMEOUT = 240000; // 4 min — backend timeout is 180s for 60s music
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pollUntilReady = (musicId: number) => {
