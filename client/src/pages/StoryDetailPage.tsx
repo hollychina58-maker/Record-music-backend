@@ -413,15 +413,17 @@ export function StoryDetailPage() {
                 onClick={async () => {
                   try {
                     // Restore original music options from the expired/failed record
-                    let genOpts: any = { musicType: 'instrumental' };
+                    let genOpts: any = {};
+                    // Priority: generationParams.musicOptions → musicType → default
                     if (music.generationParams) {
                       try {
                         const prev = JSON.parse(music.generationParams);
-                        genOpts = { ...prev.musicOptions, lyricsMode: prev.lyricsMode || 'ai_generated' };
-                      } catch { /* keep defaults */ }
-                    } else if (music.musicType) {
-                      genOpts.musicType = music.musicType;
+                        genOpts = { ...(prev.musicOptions || {}), lyricsMode: prev.lyricsMode || 'ai_generated' };
+                      } catch { /* keep fallback */ }
                     }
+                    if (!genOpts.musicType) genOpts.musicType = music.musicType || 'instrumental';
+                    if (!genOpts.musicGenre) genOpts.musicGenre = 'chinese_folk';
+                    if (!genOpts.duration) genOpts.duration = 'medium';
                     const result = await apiService.generateMusic(story.id, story.content, genOpts);
                     addToast('info', '🎵 配乐生成中，请稍后...', { duration: 4000 });
                     setMusic({ id: result.musicId, status: 'pending', file_path: null, style: null });

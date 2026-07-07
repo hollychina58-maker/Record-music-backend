@@ -57,6 +57,10 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
       setCurrentTime(audio.currentTime);
       setIsPlaying(!audio.paused);
       setPlayError(false);
+      // Init visualizer if audio is already playing
+      if (!audio.paused) {
+        setTimeout(() => initVisualizer(audio), 100);
+      }
     } else {
       const token = useAuthStore.getState().token;
       const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent);
