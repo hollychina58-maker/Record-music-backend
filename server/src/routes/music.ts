@@ -327,19 +327,8 @@ router.get('/:id/download', authMiddleware, async (req: AuthRequest, res: Respon
   if (music.story_user_id !== req.userId) { res.status(403).json({ error: 'Only the author can download this music' }); return; }
 
   if (music.file_path.startsWith('http')) {
-    // Proxy download — 302 redirect breaks axios blob response
-    try {
-      const upstream = await axios.get(music.file_path, {
-        responseType: 'stream',
-        timeout: 30000,
-      });
-      res.setHeader('Content-Disposition', `attachment; filename="music_${req.params.id}.mp3"`);
-      res.setHeader('Content-Type', String(upstream.headers['content-type'] || 'audio/mpeg'));
-      res.setHeader('Content-Length', String(upstream.headers['content-length'] || '0'));
-      (upstream.data as NodeJS.ReadableStream).pipe(res);
-    } catch {
-      res.status(502).json({ error: 'Download failed' });
-    }
+    // 302 redirect — browser downloads directly from R2 CDN (fastest)
+    res.redirect(music.file_path);
     return;
   }
 

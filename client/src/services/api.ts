@@ -240,21 +240,15 @@ class ApiService {
   }
 
   async downloadMusic(musicId: number, fileName?: string): Promise<void> {
-    // Use /download endpoint (auth required, returns file or redirect)
-    // Token goes in Authorization header via axios interceptor — not in URL
-    const response = await this.client.get(
-      `/music/${musicId}/download`,
-      { responseType: 'blob' }
-    );
-    const blob = new Blob([response.data]);
-    const url = URL.createObjectURL(blob);
+    // Direct link → 302 redirect to R2 CDN → browser native download (fast + progress bar)
+    const token = useAuthStore.getState().token;
+    const url = `${API_BASE_URL}/music/${musicId}/download?token=${encodeURIComponent(token || '')}`;
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName || `music_${musicId}.mp3`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   }
 }
 
