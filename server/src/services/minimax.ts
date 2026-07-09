@@ -211,6 +211,7 @@ export interface MusicOptions {
   musicGenre?: string;
   duration?: 'short' | 'medium' | 'long';
   lyricsMode?: 'story_as_lyrics' | 'ai_generated';
+  audioRefUrl?: string;  // Reference audio URL for music-cover model
 }
 
 const GENRE_STYLES: Record<string, string> = {
@@ -285,23 +286,29 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
   const durationSec = DURATION_SECONDS[options.duration || 'medium'] || 60;
   const moodCN = MOOD_LABELS[profile.mood] || profile.mood;
 
-  // Build structured prompt with BPM/Key
+  // Build structured prompt with BPM/Key + rich production details
+  const productionHint = isInstrumental
+    ? 'professional mixing, natural reverb, warm analog character, cinematic depth'
+    : 'professional vocal production, clear articulation, emotional delivery, studio-quality mix';
   let prompt = [
     `${randomKey}, ${bpm} BPM`,
     `${profile.style} style, ${moodCN}情绪`,
     `${profile.tempo} tempo, ${profile.instruments}为主奏乐器`,
     genreHint,
     isInstrumental ? '纯器乐无人声' : '中文深情演唱，歌词富有诗意和故事感',
+    productionHint,
     `叙事配乐风格，${durationSec}秒时长`,
   ]
     .filter(Boolean)
     .join(', ');
 
+  const isCover = !!options.audioRefUrl;
   const payload: Record<string, unknown> = {
-    model: 'music-2.6',
+    model: isCover ? 'music-cover' : 'music-2.6',
     prompt,
     is_instrumental: isInstrumental,
     output_format: 'url',
+    stream: true, // Faster E2E latency: 60s→25s
     audio_setting: {
       sample_rate: 44100,
       bitrate: 256000,
@@ -309,23 +316,30 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
     },
   };
 
+  if (isCover) {
+    payload.audio_url = options.audioRefUrl;
+  }
+
   if (!isInstrumental) {
-    // song_ai mode: let MiniMax auto-generate structured lyrics based on story context
     if (options.lyricsMode !== 'story_as_lyrics') {
+      // song_ai: let MiniMax auto-generate lyrics based on story context
       payload.lyrics_optimizer = true;
-      // Inject story context into prompt so MiniMax generates story-relevant lyrics
       prompt += `。故事主题：${text.slice(0, 300)}`;
     } else {
-      // story_as_lyrics: use truncated text directly as lyrics
-      payload.lyrics = text.slice(0, 300);
+      // story_as_lyrics: add structure tags for verse/chorus
+      const lines = text.split(/[。！？\n.!?]+/).filter(s => s.trim().length > 2);
+      const verse1 = lines.slice(0, 2).join('\n') || text.slice(0, 100);
+      const chorus = lines.slice(2, 4).join('\n') || text.slice(100, 200);
+      const verse2 = lines.slice(4, 6).join('\n') || text.slice(200, 300);
+      payload.lyrics = `[Verse]\n${verse1}\n\n[Chorus]\n${chorus}\n\n[Verse]\n${verse2}`;
     }
   }
 
-  // Re-assign prompt — must be AFTER lyrics_optimizer block (string is immutable, += creates new string)
+  // Re-assign prompt (string immutable, += creates new string)
   payload.prompt = prompt;
 
-  // Longer timeout for longer music (120s may need 3-4 min during peak)
-  const timeout = durationSec <= 30 ? 120000 : 180000;
+  // Timeout: stream mode is faster
+  const timeout = isCover ? 240000 : (durationSec <= 30 ? 120000 : 180000);
 
   const response = await axios.post<MiniMaxMusicResponse>(
     `${process.env.MINIMAX_API_URL || 'https://api.minimaxi.com/v1'}/music_generation`,

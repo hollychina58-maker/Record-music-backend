@@ -12,6 +12,32 @@ import fs from 'fs';
 
 const router = Router();
 
+// Upload reference audio for music-cover mode
+router.post('/ref-audio/upload', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { audioBase64, fileName } = req.body;
+  if (!audioBase64) { res.status(400).json({ error: 'audioBase64 is required' }); return; }
+  try {
+    const buffer = Buffer.from(audioBase64, 'base64');
+    if (buffer.length > 10 * 1024 * 1024) { res.status(400).json({ error: 'File too large (max 10MB)' }); return; }
+    const key = `audio_refs/${req.userId}_${Date.now()}_${fileName || 'ref.mp3'}`;
+    const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+    const accountId = process.env.R2_ACCOUNT_ID;
+    const bucket = process.env.R2_BUCKET_NAME;
+    const publicBase = process.env.R2_PUBLIC_URL || `https://${bucket}.${accountId}.r2.cloudflarestorage.com`;
+    if (!accountId || !bucket) { res.status(500).json({ error: 'R2 not configured' }); return; }
+    const client = new S3Client({
+      region: 'auto',
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: { accessKeyId: process.env.R2_ACCESS_KEY || '', secretAccessKey: process.env.R2_SECRET_KEY || '' },
+    });
+    await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: 'audio/mpeg' }));
+    res.json({ data: { url: `${publicBase}/${key}` } });
+  } catch (err: any) {
+    console.error('[RefAudio Upload]', err.message);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
 async function processMusicAsync(
   userId: number,
   storyId: number,
@@ -47,7 +73,7 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
   try {
     // lyricsMode: 'story_as_lyrics' → use story text directly as lyrics (author wrote it as lyrics)
     //             'ai_generated' (default) → AI extracts lyrics from story narrative
-    const { storyId, text, musicType, musicMood, musicGenre, lyricsMode, duration } = req.body;
+    const { storyId, text, musicType, musicMood, musicGenre, lyricsMode, duration, audioRefUrl } = req.body;
     if (!storyId || !text) { res.status(400).json({ error: 'storyId and text are required' }); return; }
 
     const story = await dbGet<{ id: number; tone: string | null }>('SELECT id, tone FROM stories WHERE id = ?', [storyId]);
@@ -99,7 +125,7 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
 
     // Step 2: AI analysis — only run when we actually need to create new music
     const effectiveMood = musicMood || story.tone || undefined;
-    const musicOptions: MusicOptions = { musicType, musicMood: effectiveMood, musicGenre, duration, lyricsMode };
+    const musicOptions: MusicOptions = { musicType, musicMood: effectiveMood, musicGenre, duration, lyricsMode, audioRefUrl };
     const styleLabel = (effectiveMood && MOOD_LABELS[effectiveMood]) ? MOOD_LABELS[effectiveMood] : analyzeEmotion(text).style;
 
     let effectiveText = text;

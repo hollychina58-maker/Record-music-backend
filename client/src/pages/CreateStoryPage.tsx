@@ -30,6 +30,8 @@ export function CreateStoryPage() {
   const [musicGenre, setMusicGenre] = useState('chinese_folk');
   const [musicDuration, setMusicDuration] = useState<'short' | 'medium' | 'long'>('medium');
   const [musicMood, setMusicMood] = useState('');  // empty = AI auto-detect
+  const [audioRefUrl, setAudioRefUrl] = useState(''); // reference audio for music-cover
+  const [uploadingRef, setUploadingRef] = useState(false);
   const [searchParams] = useSearchParams();
 
   // Carry-over from photo inspiration page
@@ -105,6 +107,7 @@ export function CreateStoryPage() {
             musicGenre,
             duration: musicDuration,
             ...(musicMood ? { musicMood } : {}),
+            ...(audioRefUrl ? { audioRefUrl } : {}),
             ...(musicType === 'song' ? { lyricsMode } : {}),
           });
           // Immediately sync the server-returned credit count into the store so both
@@ -309,6 +312,39 @@ export function CreateStoryPage() {
                         <span>{t('create.duration.' + d)}</span>
                       </label>
                     ))}
+                  </div>
+                </div>
+
+                <div className="music-option">
+                  <label>{t('create.refAudio')}</label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      style={{ display: 'none' }}
+                      id="ref-audio-input"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingRef(true);
+                        try {
+                          const reader = new FileReader();
+                          const base64 = await new Promise<string>((resolve) => {
+                            reader.onload = () => resolve((reader.result as string).split(',')[1]);
+                            reader.readAsDataURL(file);
+                          });
+                          const d: any = await apiService.clientPost('/music/ref-audio/upload', { audioBase64: base64, fileName: file.name });
+                          setAudioRefUrl(d.data?.url || '');
+                        } catch { /* ignore */ }
+                        finally { setUploadingRef(false); }
+                      }}
+                    />
+                    <button type="button" className="filter-btn" onClick={() => document.getElementById('ref-audio-input')?.click()} disabled={uploadingRef}>
+                      {uploadingRef ? '上传中...' : audioRefUrl ? '已上传 ✓' : '选择文件'}
+                    </button>
+                    {audioRefUrl && (
+                      <button type="button" className="filter-btn" onClick={() => setAudioRefUrl('')} style={{ color: 'var(--seal-red)' }}>✕</button>
+                    )}
                   </div>
                 </div>
               </div>

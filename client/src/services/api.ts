@@ -197,7 +197,7 @@ class ApiService {
   async generateMusic(
     storyId: number,
     text: string,
-    options?: { musicType?: string; musicGenre?: string; lyricsMode?: 'story_as_lyrics' | 'ai_generated'; duration?: 'short' | 'medium' | 'long'; musicMood?: string }
+    options?: { musicType?: string; musicGenre?: string; lyricsMode?: 'story_as_lyrics' | 'ai_generated'; duration?: 'short' | 'medium' | 'long'; musicMood?: string; audioRefUrl?: string }
   ): Promise<{ musicId: number; status: string; freeMusicCount: number | null; subscriptionRemaining: number | null }> {
     const response = await this.client.post<{ data: { musicId: number; status: string; freeMusicCount: number | null; subscriptionRemaining: number | null } }>(
       '/music/generate',
