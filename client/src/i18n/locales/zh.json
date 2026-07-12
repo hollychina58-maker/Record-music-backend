@@ -320,6 +320,7 @@
   "comment.submitting": "浮现中...",
   "comment.guest": "游客",
   "comment.delete": "删除",
+  "comment.empty": "暂无评论，来写下第一条吧",
   "comment.loading": "加载评论中...",
   "common.loading": "加载中...",
   "common.error": "出错了",

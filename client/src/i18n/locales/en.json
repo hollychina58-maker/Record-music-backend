@@ -316,6 +316,7 @@
   "comment.submitting": "Posting...",
   "comment.guest": "Guest",
   "comment.delete": "Delete",
+  "comment.empty": "No comments yet. Be the first!",
   "comment.loading": "Loading comments...",
   "common.loading": "Loading...",
   "common.error": "Something went wrong",

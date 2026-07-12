@@ -227,3 +227,11 @@
     transform: translateY(0);
   }
 }
+
+.cmt-empty {
+  text-align: center;
+  padding: var(--space-6) 0;
+  color: var(--ink-wash);
+  font-family: var(--font-ink);
+  font-size: var(--text-sm);
+}

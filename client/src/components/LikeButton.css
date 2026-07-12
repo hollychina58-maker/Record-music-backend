@@ -6,7 +6,7 @@
   padding: 4px 8px;
   border: none;
   background: transparent;
-  color: #bbb;
+  color: var(--ink-faint);
   cursor: pointer;
   border-radius: 4px;
   transition: color 0.25s, transform 0.2s;
@@ -15,7 +15,7 @@
 }
 
 .like-btn:hover {
-  color: #e07373;
+  color: var(--seal-red-light);
   transform: scale(1.08);
 }
 
@@ -24,11 +24,11 @@
 }
 
 .like-btn--liked {
-  color: #d44;
+  color: var(--seal-red);
 }
 
 .like-btn--liked:hover {
-  color: #c33;
+  color: var(--seal-red-dark);
 }
 
 /* Guest like — redirects to login on click */
@@ -43,12 +43,12 @@
 
 .like-btn--disabled {
   cursor: default;
-  color: #ccc;
+  color: var(--ink-faint);
 }
 
 .like-btn--disabled:hover {
   transform: none;
-  color: #ccc;
+  color: var(--ink-faint);
 }
 
 .like-icon {

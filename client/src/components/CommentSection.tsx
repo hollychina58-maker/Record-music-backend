@@ -107,6 +107,9 @@ export function CommentSection({ storyId, isBurned, commentLikes = {} }: Comment
       )}
 
       <div className="cmt-list">
+        {!isBurned && comments.length === 0 && (
+          <p className="cmt-empty">{t('comment.empty')}</p>
+        )}
         {!isBurned &&
           comments.map((comment) => (
             <div key={comment.id} className="cmt-item">

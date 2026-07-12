@@ -2,9 +2,9 @@
   margin-left: 8px;
   padding: 4px 8px;
   background: transparent;
-  border: 1px solid #444;
+  border: 1px solid var(--ink-dark);
   border-radius: 2px;
-  color: #999;
+  color: var(--ink-medium);
   font-size: 0.72rem;
   font-family: inherit;
   cursor: pointer;
@@ -15,12 +15,12 @@
 }
 
 .lang-switcher:hover {
-  border-color: #666;
-  color: #ccc;
+  border-color: var(--ink-medium);
+  color: var(--ink-light);
 }
 
 .lang-switcher:focus {
-  border-color: #888;
+  border-color: var(--seal-red);
 }
 
 [dir="rtl"] .lang-switcher {
