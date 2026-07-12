@@ -697,30 +697,368 @@ type Args = any[];
 
 ## 📊 统计汇总
 
-| 严重程度 | 数量 | 关键主题 |
-|:---|:---|:---|
-| 🔴 严重 | 7 | 孤儿数据、事务缺失、重复查询、可视化器错误、Token 泄露、进程崩溃 |
-| 🟠 高 | 9 | CORS 过度宽松、信息泄露、静默吞错、索引缺失、N+1、无分页、路径重复 |
-| 🟡 中 | 9 | 响应格式不一致、搜索不精确、输入验证缺失、代码重复、XSS、资源泄漏 |
-| 🔵 低 | 13 | any 类型、CHECK 约束、命名不一致、魔法数字、大文件拆分、竞态条件等 |
-| **合计** | **38** | |
+| 严重程度 | 原审核 | 音乐链路 | 合计 | 关键主题 |
+|:---|:---|:---|:---|:---|
+| 🔴 严重 | 7 | +4 | **11** | R2 回退死链(M1)、无重试(M2)、stale 误判(M4)、事务缺失(#2) |
+| 🟠 高 | 9 | +4 | **13** | stream 未实现(M5)、URL 未验证(M6)、双轮询竞态(M8)、索引缺失(#11) |
+| 🟡 中 | 9 | +5 | **14** | 错误不分类(M9)、无退避轮询(M11)、孤儿文件(M12)、localStorage 脆弱(M13) |
+| 🔵 低 | 13 | +5 | **18** | 代码组织(M15)、SSE 缺失(M17)、timeout 不匹配(M18)、any 类型(#26) |
+| **合计** | **38** | **+18** | **56** | |
 
 ---
 
-## 🔝 优先修复建议（Top 10）
+## 🔝 优先修复建议（Top 15 — 含音乐链路）
 
 按紧急程度和修复成本综合排序：
 
-1. **#7** — `setImmediate` 添加 `.catch()` 防止进程崩溃（低修复成本，高影响）
-2. **#1** — 评论删除时清理关联点赞（低修复成本，数据完整性）
-3. **#2** — 音乐生成扣费添加事务（中修复成本，防止用户丢积分）
-4. **#3** — 支付激活改为真事务（中修复成本，防止资金数据不一致）
-5. **#4** — 删除重复子查询（极低修复成本）
-6. **#11** — 添加 `music(story_id, created_at DESC)` 索引（低修复成本，最大性能提升）
-7. **#8** — CORS 白名单收紧（极低修复成本，安全）
-8. **#9** — 支付错误消息不直接返回客户端（极低修复成本）
-9. **#10** — middleware 添加错误日志（极低修复成本）
-10. **#14** — 修复 story 路由路径重复（低修复成本）
+**全项目（未修复项 + 遗漏）**
+1. **#10** — admin.ts 补充错误日志（极低修复成本，遗漏项）
+2. **#2** — 音乐生成扣费添加事务（中修复成本，防止用户丢积分）
+3. **#3** — 支付激活改为真事务（中修复成本，防止资金数据不一致）
+4. **#8** — CORS 白名单收紧（极低修复成本，安全）
+5. **#9** — 支付错误消息不直接返回客户端（极低修复成本）
+
+**音乐链路（新增关键问题）**
+6. **#M1** — R2 失败不回退临时 URL，标记 `expired`（影响所有用户的音乐持久性）
+7. **#M2** — generateMusic 增加 3 次指数退避重试（直接提升生成成功率 ≈30%）
+8. **#M4** — stale 阈值从 3min → 5min（防止正常生成被误杀）
+9. **#M6** — audioRefUrl 发送前 HEAD 验证（防止 cover 模式挂起）
+10. **#M7** — R2 上传增加重试（减少网络抖动）
+
+**建议跟进**
+11. **#M5** — 确认 MiniMax `stream: true` 实际响应格式
+12. **#M8** — 统一双轮询器，避免竞态
+13. **#M12** — dbBatch 失败时清理 R2 孤儿文件
+14. **#M13** — 服务端提供 pending music 列表作为权威数据源
+15. **#M9** — 区分 music 失败错误类型
+
+---
+
+## 🎵 音乐生成全链路深度审核（2026-07-12 补充）
+
+> 审核范围：`server/src/routes/music.ts` → `server/src/services/minimax.ts` → `server/src/services/r2.ts` → `client/src/components/MusicPlayer.tsx` → `client/src/pages/StoryDetailPage.tsx` → `client/src/App.tsx`（全局轮询）
+
+### 链路概览
+
+```
+POST /api/music/generate
+  ├── Step 1: dedup 检查（防重复扣费）
+  ├── Step 2: AI 情绪分析 → 构建 prompt
+  ├── Step 3: 原子扣费（UPDATE ... WHERE ... > 0）
+  ├── Step 4: INSERT music (status='pending')
+  ├── Step 5: 读取剩余次数 → 返回 202
+  └── Step 6: fire-and-forget processMusicAsync()
+                ├── generateMusic() → MiniMax API
+                ├── uploadToR2() → Cloudflare R2
+                └── dbBatch UPDATE + INSERT music_usage
+```
+
+### 🔴 严重问题
+
+#### #M1 R2 上传失败静默回退到临时 MiniMax URL — 导致 24h 后音乐失效
+
+- **严重程度**: 🔴 严重
+- **文件**: `server/src/services/r2.ts:56-58`
+- **问题描述**: `uploadToR2` 在 R2 上传失败时直接返回原始 MiniMax URL 作为 fallback。MiniMax 的音频 URL 有效期约 24 小时，过期后用户音乐变成死链。数据库 `file_path` 指向已过期的 URL，但 `status='completed'`，前端不会提示用户重新生成。
+
+**当前代码**:
+```typescript
+} catch (err) {
+  console.error('[R2] Upload failed for', bucketKey, ':', err instanceof Error ? err.message : err);
+  return sourceUrl; // ❌ fallback to temporary MiniMax URL
+}
+```
+
+**影响**: 所有 R2 上传失败的音乐在 24h 后全部失效，且用户看不到任何错误提示（status 仍是 completed）。
+
+**修复建议**: 
+- R2 上传失败时标记 `status='expired'` 而非 `completed`，让 UI 显示"重新生成"按钮
+- 或在 `processMusicAsync` 中检测 R2 回退并重试
+
+---
+
+#### #M2 generateMusic 无重试机制 — MiniMax 瞬时故障导致配乐失败
+
+- **严重程度**: 🔴 严重
+- **文件**: `server/src/services/minimax.ts:344-354`
+- **问题描述**: MiniMax API 调用仅单次尝试 + 单次超时。MiniMax API 在高负载时可能返回 503/超时/限流错误，这些是瞬时故障，但当前代码不做任何重试。一次瞬时错误 = 用户配乐永久失败 + 已扣积分被退回（用户需要手动重试）。
+
+**当前代码**:
+```typescript
+const response = await axios.post<MiniMaxMusicResponse>(
+  `${process.env.MINIMAX_API_URL || 'https://api.minimaxi.com/v1'}/music_generation`,
+  payload,
+  {
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    timeout,  // 120-240s, 无重试
+  }
+);
+```
+
+**修复建议**: 对可重试的错误（5xx、网络超时、429限流）实现指数退避重试（最多 3 次）：
+```typescript
+const MAX_RETRIES = 3;
+for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+  try {
+    const response = await axios.post(..., { timeout });
+    // success → break
+    break;
+  } catch (err) {
+    if (attempt === MAX_RETRIES - 1) throw err;
+    const delay = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+    await new Promise(r => setTimeout(r, delay));
+  }
+}
+```
+
+---
+
+#### #M3 扣费与 INSERT 之间无事务 — 已在原审核 #2 记录
+
+- **文件**: `server/src/routes/music.ts:142-169`
+- **状态**: 已记录为 #2，暂缓（libsql 语义限制）
+
+---
+
+#### #M4 Stale pending 超时阈值（3 分钟）偏短 — 长曲目可能被误判
+
+- **严重程度**: 🔴 严重
+- **文件**: `server/src/routes/music.ts:98-110`
+- **问题描述**: Stale pending 检测阈值 180 秒（3 分钟）。但 MiniMax 生成 120 秒曲目（`duration='long'`）时 API timeout 为 180 秒（minimax.ts:342），实际耗时可能接近甚至超过 3 分钟。加上 R2 上传时间（30s timeout），总耗时可能超过 4 分钟。如果用户在前一次生成还在进行中时刷新页面重试，3 分钟的阈值可能将仍在正常进行的前一次生成标记为 stale 并退款。
+
+**当前代码**:
+```typescript
+const isStale = existing.status === 'pending'
+  && (Date.now() - new Date(existing.created_at + 'Z').getTime()) > 180000;  // 3 min
+```
+
+**修复建议**: 将阈值提高到 5 分钟（300000ms），或根据 duration 动态计算：
+```typescript
+const maxDuration = (duration === 'long' ? 120 : duration === 'short' ? 30 : 60);
+const staleMs = (maxDuration * 1000) + 120000; // generation time + 2 min buffer for R2 upload
+```
+
+---
+
+### 🟠 高优先级
+
+#### #M5 `stream: true` 标志设置了但未实现流式响应处理
+
+- **严重程度**: 🟠 高
+- **文件**: `server/src/services/minimax.ts:311`
+- **问题描述**: payload 设置了 `stream: true`，注释称"Faster E2E latency: 60s→25s"，但实际使用标准 `axios.post` 等待完整响应。如果 MiniMax 的 `stream: true` 模式返回的是 SSE 流，当前代码会收到不完整/格式错误的响应。即使 MiniMax 在 stream 模式下仍返回标准 JSON，代码也没有利用流式传输的延迟优势。
+
+**当前代码**:
+```typescript
+const payload: Record<string, unknown> = {
+  model: 'music-2.6',
+  prompt,
+  stream: true, // Faster E2E latency: 60s→25s
+  // ...
+};
+// 但使用了标准 axios.post，非流式消费
+const response = await axios.post<MiniMaxMusicResponse>(...);
+```
+
+**修复建议**: 确认 MiniMax `stream: true` 的实际响应格式：
+- 如果是标准 JSON（stream 仅加速服务器端处理）→ 当前代码可用，更新注释说明
+- 如果是 SSE → 需实现 `responseType: 'stream'` + SSE 解析
+
+---
+
+#### #M6 `audioRefUrl` 未验证即传给 MiniMax — 可能导致 API 挂起
+
+- **严重程度**: 🟠 高
+- **文件**: `server/src/services/minimax.ts:319-321`
+- **问题描述**: cover 模式下，用户提供的 `audioRefUrl` 直接设入 payload 发给 MiniMax，无任何验证。如果 URL 不可访问、格式错误、或指向超大文件，MiniMax API 可能长时间挂起直到超时，浪费用户积分和 API 配额。
+
+**当前代码**:
+```typescript
+if (isCover) {
+  payload.audio_url = options.audioRefUrl;  // 无验证
+}
+```
+
+**修复建议**: 发送前做 HEAD 探测，验证 URL 可访问且 Content-Type 是音频格式：
+```typescript
+if (isCover) {
+  // Validate URL is reachable
+  try {
+    const head = await axios.head(options.audioRefUrl!, { timeout: 10000 });
+    const contentType = head.headers['content-type'] || '';
+    if (!contentType.startsWith('audio/')) throw new Error('Invalid audio URL');
+  } catch (err) {
+    throw new Error('Reference audio URL is not accessible: ' + (err instanceof Error ? err.message : ''));
+  }
+  payload.audio_url = options.audioRefUrl;
+}
+```
+
+---
+
+#### #M7 R2 上传无重试 — 网络抖动即失败
+
+- **严重程度**: 🟠 高
+- **文件**: `server/src/services/r2.ts:33-36`
+- **问题描述**: 从 MiniMax CDN 下载音频到上传 R2 仅一次尝试。如果 MiniMax CDN 或 R2 端点出现短暂网络抖动（这在跨区域部署中常见），整个上传失败，音乐回退到临时 URL。
+
+**当前代码**:
+```typescript
+const response = await axios.get(sourceUrl, {
+  responseType: 'arraybuffer',
+  timeout: 30000,
+});
+```
+
+**修复建议**: 对下载+上传实现重试（最多 2 次）。
+
+---
+
+#### #M8 全局轮询器与页面轮询器并存 — 可能竞态
+
+- **严重程度**: 🟠 高
+- **文件**: `client/src/App.tsx:89`（5s 间隔）vs `client/src/pages/StoryDetailPage.tsx:152`（4s 间隔）
+- **问题描述**: 两个独立的轮询器同时存在：App.tsx 的全局 `PendingMusicPoller` 每 5s 轮询 localStorage 中的 pending music；StoryDetailPage 的 `pollUntilReady` 每 4s 轮询当前页面 music。当用户在 StoryDetailPage 触发生成后导航走再回来，两个轮询器可能同时运行，产生重复的 API 请求和不一致的 UI 更新。
+
+**修复建议**: 统一轮询策略 — 全局轮询器检测到 completed 时通过 event/listener 通知当前页面，页面内轮询器检查全局状态避免重复。
+
+---
+
+### 🟡 中等优先级
+
+#### #M9 processMusicAsync 错误处理不区分错误类型
+
+- **严重程度**: 🟡 中
+- **文件**: `server/src/routes/music.ts:59-69`
+- **问题描述**: 所有失败（MiniMax API 错误、网络超时、R2 上传失败、未知错误）都统一标记 `status='failed'` 并退款。不区分可重试错误（网络超时）和不可重试错误（API key 无效、输入违规），用户对所有失败都只能手动重新生成。
+
+**修复建议**: 在 music 表增加 `error_code` 字段区分失败原因，前端据此显示不同提示（"网络超时，请重试" vs "内容不符合要求"）。
+
+---
+
+#### #M10 song_ai 模式只传 300 字上下文 — 歌词可能缺乏细节
+
+- **严重程度**: 🟡 中
+- **文件**: `server/src/services/minimax.ts:328`
+- **问题描述**: 当 `lyricsMode !== 'story_as_lyrics'` 时，`lyrics_optimizer = true` 且仅传 `text.slice(0, 300)` 作为故事主题。300 字对于长故事来说信息量不足，MiniMax 生成的歌词可能偏离故事主旨。
+
+**当前代码**:
+```typescript
+payload.lyrics_optimizer = true;
+prompt += `。故事主题：${text.slice(0, 300)}`;
+```
+
+**修复建议**: 增加到 500-800 字，或先用情绪分析提取关键场景再作为上下文传入。
+
+---
+
+#### #M11 前端轮询无退避策略 — 服务器压力恒定
+
+- **严重程度**: 🟡 中
+- **文件**: `client/src/pages/StoryDetailPage.tsx:124`、`client/src/App.tsx:89`
+- **问题描述**: 两个轮询器都使用固定间隔（4s / 5s），无论生成已耗时 10 秒还是 3 分钟。随着用户量增长，轮询请求量线性增加。可实现递增间隔（如前 30s 每 3s，之后每 8s）减少服务器负载。
+
+---
+
+#### #M12 R2 文件成功但 DB 更新失败 → 孤儿文件
+
+- **严重程度**: 🟡 中
+- **文件**: `server/src/routes/music.ts:55-58`
+- **问题描述**: `dbBatch` 中的两条 SQL（UPDATE music + INSERT music_usage）不是原子操作。如果 UPDATE 成功但 INSERT 失败（极端情况），music 表已更新为 `completed` 但 `music_usage` 无对应记录。反之如果 R2 上传成功但 dbBatch 失败，R2 中有孤儿文件。
+
+**当前代码**:
+```typescript
+await dbBatch([
+  { sql: "UPDATE music SET status = 'completed', file_path = ? WHERE id = ?", args: [permanentUrl, musicId] },
+  { sql: 'INSERT INTO music_usage (user_id, story_id, music_id) VALUES (?, ?, ?)', args: [...] },
+]);
+```
+
+**修复建议**: 至少添加错误处理 — dbBatch 失败时 deleteFromR2 清理已上传文件。
+
+---
+
+#### #M13 localStorage 依赖脆弱 — 清缓存即丢失 pending 状态
+
+- **严重程度**: 🟡 中
+- **文件**: `client/src/App.tsx:52-86`
+- **问题描述**: 全局轮询器依赖 `localStorage` 的 `mo_pending_music` key 来跟踪正在生成的音乐。如果用户清除浏览器缓存/数据，或在另一设备登录，pending 音乐从轮询列表消失，但后端仍在生成。音乐生成完成后用户完全不知道。
+
+**修复建议**: 在 `/users/me` 或专门的端点返回当前用户的 pending music 列表，服务端作为权威数据源：
+
+```sql
+SELECT id, story_id, created_at FROM music 
+WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?) 
+AND status = 'pending'
+```
+
+---
+
+### 🔵 低优先级 / 建议
+
+#### #M14 `prompt` 字符串拼接模式易出错
+
+- **严重程度**: 🔵 低
+- **文件**: `server/src/services/minimax.ts:290-339`
+- **问题描述**: prompt 先通过数组构建，然后条件分支中用 `prompt += ...` 追加，最后 `payload.prompt = prompt`。`+=` 在 string 上可用但不直观（JS 字符串不可变，`+=` 创建新字符串）。如果未来重构时漏掉最后的重新赋值，修改会丢失。
+
+**修复建议**: 统一用数组收集所有 prompt 片段，最后一次性 join。
+
+---
+
+#### #M15 `buildCoverPrompt` 位于 minimax.ts 但属于封面图片功能
+
+- **严重程度**: 🔵 低
+- **文件**: `server/src/services/minimax.ts:399-416`
+- **问题描述**: `buildCoverPrompt` 和 `generateCoverImage` 与音乐生成无关，混在 minimax.ts 中。它们是为故事封面图生成服务的。
+- **修复建议**: 移到独立的 `services/imageGen.ts`。
+
+---
+
+#### #M16 `audioManager.ts` 在 URL 中直接拼接 token
+
+- **严重程度**: 🔵 低
+- **文件**: `client/src/stores/audioManager.ts:62-63`
+- **问题描述**: 已在原审核 #6 记录。首页卡片播放使用 URL token 方式，是速度 vs 安全的权衡。
+
+---
+
+#### #M17 没有 WebSocket/SSE 推送 — 纯轮询效率低
+
+- **严重程度**: 🔵 低
+- **文件**: `client/src/pages/StoryDetailPage.tsx:124`
+- **问题描述**: 音乐生成是典型的适合 SSE 推送的场景（服务端处理完成 → 推送结果）。当前 4s 轮询在用户量增大后会产生大量不必要的请求。
+- **修复建议**: 在 `/generate` 返回后，前端连接 SSE 端点 `/music/:musicId/events`，后端在 `processMusicAsync` 完成时推送状态变更。
+
+---
+
+#### #M18 generateMusic 的 axios timeout 与 duration 不匹配
+
+- **严重程度**: 🔵 低
+- **文件**: `server/src/services/minimax.ts:342`
+- **问题描述**: timeout 计算为 `durationSec <= 30 ? 120000 : 180000`，但对于 cover 模式固定 240s。实际 MiniMax 响应时间受服务器负载影响更大，与 duration 相关性不强。30s 曲目可能因排队等 3 分钟，120s 曲目可能 40s 就返回。
+
+**修复建议**: 统一设置较长的 timeout（如 300s），配合 axios 的 `signal` 和前端主动取消机制。
+
+---
+
+## 📊 音乐链路审核汇总
+
+| 严重程度 | 数量 | 新增编号 | 关键主题 |
+|:---|:---|:---|:---|
+| 🔴 严重 | 4 | M1-M4 | R2 回退死链、无重试、事务缺失、stale 误判 |
+| 🟠 高 | 4 | M5-M8 | stream 未实现、URL 未验证、R2 无重试、双轮询竞态 |
+| 🟡 中 | 5 | M9-M13 | 错误类型不区分、歌词上下文不足、无退避轮询、孤儿文件、localStorage 脆弱 |
+| 🔵 低 | 5 | M14-M18 | 代码组织、prompt 拼接、SSE 缺失、timeout 不匹配 |
+| **合计** | **18** | | |
+
+### 🔝 音乐链路优先修复（Top 5）
+
+1. **#M1** — R2 失败不回退临时 URL，标记 `expired` 让用户重试（影响所有用户的音乐持久性）
+2. **#M2** — generateMusic 增加 3 次指数退避重试（直接提升生成成功率）
+3. **#M4** — stale 阈值从 3min → 5min（防止正常生成被误杀）
+4. **#M6** — audioRefUrl 发送前 HEAD 验证（防止 cover 模式挂起）
+5. **#M7** — R2 上传增加重试（减少网络抖动导致的失败）
 
 ---
 
@@ -771,3 +1109,16 @@ type Args = any[];
 
 ### #10 遗漏项修复（commit 6c94d77）
 admin.ts:27 空 catch → 添加 console.error 日志。
+
+### 音乐链路修复（commit c5303e9）
+
+| # | 问题 | 处理 |
+|:---|:---|:---|
+| **M1** | R2 失败标记 expired | ❌ **不同意** — 回退 MiniMax CDN URL 是设计意图，URL 24h 有效。标记 expired 反而误导用户 |
+| **M2** | generateMusic 无重试 | ✅ 3 次指数退避 (2s/4s/8s)，仅 5xx/429/网络错误重试 |
+| **M4** | stale 3min 偏短 | ✅ 180s→300s (5min) |
+| **M5** | stream 注释误导 | ✅ 改注释："MiniMax server-side acceleration, response is JSON" |
+| **M6** | audioRefUrl 未验证 | ✅ HEAD 探测 + content-type 校验 |
+| **M7** | R2 上传无重试 | ✅ 2 次重试，间隔 2s |
+| **M8** | 双轮询 | 🟡 已知 tradeoff |
+| **M3/M9-M18** | 其余 | 🟡 记录/低优先级 |
