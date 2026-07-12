@@ -917,10 +917,37 @@ export function useScrollReveal(selector: string, threshold = 0.1) {
 | TSX 衔接 | 🟠 50% — 2/4 页面遗漏 JS 注入，导致 stagger 在长列表中失效 |
 | #27 跳过理由 | ✅ 合理 — 首帧闪现是已知问题，需 useLayoutEffect 方案 |
 
-### 动效遗漏修复（commit cd65ef2）
+### 动效遗漏修复（commit cd65ef2）— AI 审核验证
 
-| # | 遗漏 | 修复 |
-|:---|:---|:---|
-| #24 | hover 规则冲突 + TSX 无 delay | 删除旧 hover + `(c, i)` + `animationDelay` |
-| #25 | TSX 无 delay | `(m, i)` + `animationDelay` |
-| #26 | 缺 user-stats + followPopIn | CSS 已补 |
+| # | 遗漏项 | 状态 | 证据 |
+|:---|:---|:---:|:---|
+| **#24** | hover 规则冲突 | ✅ | `MessagesPage.css:45-47` — 旧规则已删，仅保留 `var(--paper-aged)` |
+| **#24** | TSX animationDelay | ✅ | `MessagesPage.tsx:58-60` — `(c, i)` + `Math.min(i*0.04, 0.6)s` |
+| **#25** | TSX animationDelay | ✅ | `MessageDetailPage.tsx:102-107` — `(m, i)` + `Math.min(i*0.05, 0.8)s` |
+| **#26** | user-stats fadeInScale | ✅ | `UserProfilePage.css:244-247` — `fadeInScale 0.4s var(--ease-spring) 0.4s` |
+| **#26** | followPopIn | ⚠️ | `UserProfilePage.css:249-254` — keyframe 已定义，但 `.user-follow-btn.just-followed` 选择器缺失，动画无法触发 |
+
+#### #26 followPopIn 说明
+
+`@keyframes followPopIn` 已正确定义，但缺少触发它的 CSS 选择器。需追加一行：
+
+```css
+.user-follow-btn.just-followed {
+  animation: followPopIn 0.4s var(--ease-spring);
+}
+```
+
+这是纯 CSS 补漏，不涉及 JS。加上后修复者可在 `UserProfilePage.tsx` 关注成功回调中用 `classList.add('just-followed')` 按需触发。
+
+#### 终态汇总
+
+| # | CSS | TSX | 终态 |
+|:---|:---:|:---:|:---|
+| #23 | ✅ | ✅ | **完美** |
+| #24 | ✅ | ✅ | **完美** |
+| #25 | ✅ | ✅ | **完美** |
+| #26 | ⚠️ | ✅ | **缺 1 行 CSS 选择器** |
+| #27 | — | — | 🔜 合理跳过 |
+
+**前 3 项全部闭环，仅 #26 缺一行 `.just-followed` 选择器即可全绿。**
+### #26 最终修复（commit 61cc790）：补充 .just-followed 选择器
