@@ -879,14 +879,48 @@ export function useScrollReveal(selector: string, threshold = 0.1) {
 2. **Input.css 跳过合理** — 该组件确实未被任何表单使用，修复后也会被 tree-shake；应先推广组件使用再修 token
 3. **动效新增建议独立于 token 修复** — #23-#28 均为新增建议，不涉及之前文档的任何条目，全部是 P1/P2 增强
 
-### 动效修复（commit 6308aaf）
+### 动效修复（commit 6308aaf）— AI 审核验证
 
-| # | 实现 | 状态 |
+| # | 修复项 | CSS | TSX | 问题 |
+|:---|:---|:---:|:---:|:---|
+| **#23** | 页面过渡 pageIn | ✅ `index.css:182-190` | ✅ 无需改（Layout 已有基础设施） | — |
+| **#24** | MessagesPage 列表 stagger | ⚠️ `MessagesPage.css:26-43` | ❌ `.tsx:58` 仍为 `c =>` 无 `animationDelay` | **hover 规则冲突**: 第 47 行 `var(--paper-aged)` 被第 50 行 `rgba(28,28,28,0.03)` 覆盖；缺少 `:has(.msg-badge)` 未读指示器 |
+| **#25** | MessageDetailPage 气泡入场 | ✅ `MessageDetailPage.css:105-126` | ❌ `.tsx:102` 仍为 `m =>` 无 `animationDelay` | 所有气泡无 stagger，同时入场 |
+| **#26** | UserProfilePage 入场 | ⚠️ `UserProfilePage.css:220-242` | ✅ 无需改（纯 CSS） | 缺少 `.user-stats` fadeInScale + `.just-followed`/`followPopIn` |
+| **#27** | 滚动渐显 | — | — | 🔜 合理跳过（首帧闪现风险） |
+
+#### 逐项详情
+
+**#23 ✅ 完美** — `page-transition-enter` + `@keyframes pageIn` 与建议完全一致。Layout.tsx 已有 `key={location.pathname}`，动画自动触发。
+
+**#24 ⚠️ 需修 2 处**:
+
+1. **hover 规则冲突**（`MessagesPage.css:45-51`）:
+```css
+/* 当前：两条 .msg-item:hover 互相覆盖 */
+.msg-item:hover { background: var(--paper-aged); }        /* 第 47 行 — 被覆盖 */
+.msg-item:hover { background: rgba(28,28,28,0.03); }       /* 第 50 行 — 生效 */
+```
+应删除第 49-51 行的旧 hover 规则。
+
+2. **TSX 未注入 animationDelay**（`MessagesPage.tsx:58`）：如果对话超过 10 条，nth-child 不够用。将 `conversations.map(c =>` 改为 `conversations.map((c, i) =>` + `style={{ animationDelay: ... }}`。
+
+**#25 ⚠️ 需修 1 处**: 气泡全部同时入场无 stagger。`MessageDetailPage.tsx:102` 将 `messages.map(m =>` 改为 `messages.map((m, i) =>` + `style={{ animationDelay: ... }}`。
+
+**#26 ⚠️ 缺失 2 项**: `.user-stats` 的 `fadeInScale` 动画和 `.just-followed`/`followPopIn` 未实现。文档建议中已含完整代码。
+
+#### 总体评价
+
+| 维度 | 评分 |
+|:---|:---|
+| CSS 实现精度 | 🟡 80% — 4/4 页面 CSS 已加，但 #24 有冲突，#26 缺 2 项 |
+| TSX 衔接 | 🟠 50% — 2/4 页面遗漏 JS 注入，导致 stagger 在长列表中失效 |
+| #27 跳过理由 | ✅ 合理 — 首帧闪现是已知问题，需 useLayoutEffect 方案 |
+
+### 动效遗漏修复（commit cd65ef2）
+
+| # | 遗漏 | 修复 |
 |:---|:---|:---|
-| #23 | 页面过渡 pageIn 动画 (Layout key={pathname}) | ✅ |
-| #24 | MessagesPage 列表项 msgItemIn stagger | ✅ |
-| #25 | MessageDetailPage 气泡 bubbleIn + 发送按钮active | ✅ |
-| #26 | UserProfilePage 卡片+故事 staggered reveal | ✅ |
-| #27 | 滚动渐显 | 🔜 跳过 — 存在首帧闪现问题，需 useLayoutEffect |
-
-**理由**: #27 的 `opacity: 0` + `IntersectionObserver` 方案在 `useEffect`（paint 后触发）中会闪现不可见帧，需改用 `useLayoutEffect` 同步检查可见性，属单独任务。
+| #24 | hover 规则冲突 + TSX 无 delay | 删除旧 hover + `(c, i)` + `animationDelay` |
+| #25 | TSX 无 delay | `(m, i)` + `animationDelay` |
+| #26 | 缺 user-stats + followPopIn | CSS 已补 |
