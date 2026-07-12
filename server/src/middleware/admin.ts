@@ -24,7 +24,8 @@ export async function adminMiddleware(
     }
 
     next();
-  } catch {
+  } catch (err) {
+    console.error('[Admin] Database lookup failed:', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'Database error' });
   }
 }
