@@ -216,3 +216,27 @@
     padding: var(--space-6) var(--space-4);
   }
 }
+
+/* Entrance animations */
+.user-profile-card {
+  opacity: 0;
+  animation: fadeInUp 0.6s var(--ease-out-expo) 0.1s forwards;
+}
+.user-story-card {
+  opacity: 0;
+  animation: cardReveal 0.5s var(--ease-out-expo) forwards;
+}
+.user-story-card:nth-child(1)  { animation-delay: 0.15s; }
+.user-story-card:nth-child(2)  { animation-delay: 0.22s; }
+.user-story-card:nth-child(3)  { animation-delay: 0.29s; }
+.user-story-card:nth-child(4)  { animation-delay: 0.36s; }
+.user-story-card:nth-child(5)  { animation-delay: 0.43s; }
+.user-story-card:nth-child(6)  { animation-delay: 0.50s; }
+.user-story-card:nth-child(7)  { animation-delay: 0.57s; }
+.user-story-card:nth-child(8)  { animation-delay: 0.64s; }
+.user-story-card:nth-child(9)  { animation-delay: 0.71s; }
+.user-story-card:nth-child(10) { animation-delay: 0.78s; }
+.user-follow-btn:not(:disabled):active {
+  transform: scale(0.92);
+  transition: transform 0.12s var(--ease-spring);
+}

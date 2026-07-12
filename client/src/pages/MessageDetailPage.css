@@ -101,3 +101,26 @@
     padding: var(--space-3);
   }
 }
+
+/* Bubble entrance */
+.chat-bubble-wrap {
+  opacity: 0;
+  animation: bubbleIn 0.4s var(--ease-out-expo) forwards;
+}
+.chat-bubble-wrap--mine { animation-name: bubbleInRight; }
+@keyframes bubbleIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes bubbleInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.chat-send-btn:not(:disabled):active {
+  transform: scale(0.93);
+  transition: transform 0.12s var(--ease-spring);
+}
+.chat-input:focus {
+  border-color: var(--ink-faint);
+  box-shadow: 0 0 0 3px var(--seal-glow);
+}

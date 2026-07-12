@@ -179,6 +179,16 @@
               transform var(--transition-normal) var(--ease-in-out);
 }
 
+/* Page mount transition — triggers on route change via Layout's key={pathname} */
+.page-transition-enter {
+  animation: pageIn 0.4s var(--ease-out-expo);
+}
+
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Ink Reveal Animation for pages */
 .ink-reveal {
   position: relative;

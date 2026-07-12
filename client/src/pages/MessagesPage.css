@@ -23,6 +23,27 @@
   color: inherit;
   border-bottom: 1px solid rgba(28,28,28,0.06);
   transition: background var(--transition-fast);
+  opacity: 0;
+  animation: msgItemIn 0.45s var(--ease-out-expo) forwards;
+}
+.msg-item:nth-child(1)  { animation-delay: 0.04s; }
+.msg-item:nth-child(2)  { animation-delay: 0.08s; }
+.msg-item:nth-child(3)  { animation-delay: 0.12s; }
+.msg-item:nth-child(4)  { animation-delay: 0.16s; }
+.msg-item:nth-child(5)  { animation-delay: 0.20s; }
+.msg-item:nth-child(6)  { animation-delay: 0.24s; }
+.msg-item:nth-child(7)  { animation-delay: 0.28s; }
+.msg-item:nth-child(8)  { animation-delay: 0.32s; }
+.msg-item:nth-child(9)  { animation-delay: 0.36s; }
+.msg-item:nth-child(10) { animation-delay: 0.40s; }
+
+@keyframes msgItemIn {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.msg-item:hover {
+  background: var(--paper-aged);
 }
 
 .msg-item:hover {
