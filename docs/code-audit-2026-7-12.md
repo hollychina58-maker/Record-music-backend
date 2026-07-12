@@ -22,24 +22,25 @@
 
 ## 🔴 严重问题（必须修复）
 
-### #1 评论删除时未清理关联点赞 — 产生孤儿数据
+### #1 评论删除时未清理关联点赞 — 产生孤儿数据 ✅ 已修复
 
 - **严重程度**: 🔴 严重
 - **文件**: `server/src/routes/comment.ts:65`
+- **状态**: ✅ 已修复 — commit 22d1dc8
 - **问题描述**: 用户删除自己评论时直接执行 `DELETE FROM comments`，未先清理 `likes` 表中 `target_type='comment'` 的行，留下指向不存在评论的孤儿点赞记录。对比 admin 端 `admin/comments.ts:53-54` 已正确实现先删点赞再删评论。
 
-**当前代码**:
+**原代码**:
 ```typescript
 const result = await dbRun('DELETE FROM comments WHERE id = ?', [id]);
 ```
 
-**对比 admin/comments.ts（正确做法）**:
+**修复后**:
 ```typescript
 await dbRun("DELETE FROM likes WHERE target_type = 'comment' AND target_id = ?", [id]);
-await dbRun('DELETE FROM comments WHERE id = ?', [id]);
+const result = await dbRun('DELETE FROM comments WHERE id = ?', [id]);
 ```
 
-**修复建议**: 在删除评论前添加 `DELETE FROM likes WHERE target_type = 'comment' AND target_id = ?`
+**验证结果**: ✅ 已确认 — comment.ts:66 在 DELETE comments 前正确清理 likes 表。与 admin/comments.ts 做法一致。
 
 ---
 
@@ -89,13 +90,14 @@ await dbBatch(stmts); // ❌ 每条语句独立执行，中途崩溃会导致不
 
 ---
 
-### #4 故事列表查询重复执行同一个子查询两次
+### #4 故事列表查询重复执行同一个子查询两次 ✅ 已修复
 
 - **严重程度**: 🔴 严重
 - **文件**: `server/src/routes/story.ts:49-50`
+- **状态**: ✅ 已修复 — commit 22d1dc8
 - **问题描述**: SQL 中同一子查询出现两次，结果列名冲突（第二个覆盖第一个），浪费一次数据库往返。
 
-**当前代码**:
+**原代码**:
 ```sql
 -- 第49行
 (SELECT id FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_id,
@@ -103,37 +105,43 @@ await dbBatch(stmts); // ❌ 每条语句独立执行，中途崩溃会导致不
 (SELECT id FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_id,
 ```
 
-**修复建议**: 删除重复行
+**修复后**:
+```sql
+-- 第49行
+(SELECT id FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_id,
+-- 第50行 — 改为取 status
+(SELECT status FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_status,
+-- 第51行
+(SELECT music_type FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_type
+```
+
+**验证结果**: ✅ 已确认 — 三个子查询各取不同字段，无重复。
 
 ---
 
-### #5 可视化器连接到错误的 Audio 元素
+### #5 可视化器连接到错误的 Audio 元素 ✅ 已修复
 
 - **严重程度**: 🔴 严重
 - **文件**: `client/src/components/MusicPlayer.tsx:50-52, 179-180`
+- **状态**: ✅ 已修复 — commit 2eeb6ec
 - **问题描述**: `initVisualizer(audio)` 使用了 useEffect 中创建的本地 dummy Audio 引用，但实际播放用的是 `audioManager` 内部的共享 Audio 元素。**可视化进度条不会响应实际播放**。
 
-**当前代码**:
+**原代码**:
 ```typescript
-// Line 44-52: useEffect creates a LOCAL audio (dummy, never actually plays)
-const audio = isShared ? globalAudio : new Audio();
-audioRef.current = audio;
-// ...
-// Line 179-180: togglePlay uses audioManager for playback, but initVisualizer uses local 'audio'
 useAudioManager.getState().play(musicId, audioUrl)
   .then(() => initVisualizer(audio))  // ❌ 用错了 audio 引用
   .catch(() => {});
 ```
 
-**修复建议**:
+**修复后**:
 ```typescript
-if (musicId != null) {
-  useAudioManager.getState().play(musicId, audioUrl).then(() => {
-    const actualAudio = useAudioManager.getState().getAudio();
-    if (actualAudio) initVisualizer(actualAudio);
-  }).catch(() => {});
-}
+useAudioManager.getState().play(musicId, audioUrl).then(() => {
+  const actualAudio = useAudioManager.getState().getAudio();
+  if (actualAudio) initVisualizer(actualAudio);
+}).catch(() => {});
 ```
+
+**验证结果**: ✅ 已确认 — MusicPlayer.tsx:181-182 从 audioManager 获取实际 Audio 引用。
 
 ---
 
@@ -147,35 +155,53 @@ if (musicId != null) {
 
 ---
 
-### #7 未处理的 Promise Rejection 可导致进程崩溃
+### #7 未处理的 Promise Rejection 可导致进程崩溃 ✅ 已修复
 
 - **严重程度**: 🔴 严重
-- **文件**: `server/src/routes/comment.ts:50-55`、`server/src/routes/follow.ts:23-26`
+- **文件**: `server/src/routes/comment.ts:50-55`、`server/src/routes/follow.ts:23-26`、`server/src/routes/like.ts:40-48`
+- **状态**: ✅ 已修复 — commit 22d1dc8
 - **问题描述**: `setImmediate(async () => { await dbRun(...) })` 内没有 try/catch，如果通知插入失败，Node.js 16+ 会因 unhandled promise rejection **终止进程**。
 
-**当前代码**:
+**原代码**:
 ```typescript
-// comment.ts:50-55
+// comment.ts
 setImmediate(async () => {
-  await dbRun('INSERT INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
-    [story.user_id, 'comment_story', parseInt(storyId, 10), req.userId!]);
+  await dbRun('INSERT INTO notifications ...', [...]);
 });
 
-// follow.ts:23-26
+// follow.ts
 setImmediate(async () => {
-  await dbRun('INSERT INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
-    [followedId, 'follow', followerId, followerId]);
+  await dbRun('INSERT INTO notifications ...', [...]);
+});
+
+// like.ts
+setImmediate(async () => {
+  await dbGet('SELECT ...').then(...);  // 无 .catch()
 });
 ```
 
-**修复建议**: 添加 `.catch()` 处理：
+**修复后**:
 ```typescript
+// comment.ts
 setImmediate(() => {
   dbRun('INSERT INTO notifications ...', [...]).catch(err =>
-    console.error('[Comment] Notification insert failed:', err)
-  );
+    console.error('[Comment] Notification insert failed:', err));
+});
+
+// follow.ts
+setImmediate(() => {
+  dbRun('INSERT INTO notifications ...', [...]).catch(err =>
+    console.error('[Follow] Notification insert failed:', err));
+});
+
+// like.ts
+setImmediate(() => {
+  dbGet('SELECT ...').then(...).catch(err =>
+    console.error('[Like] Notification insert failed:', err));
 });
 ```
+
+**验证结果**: ✅ 已确认 — comment.ts:54、follow.ts:26、like.ts:48 三处均添加 .catch()。
 
 ---
 
@@ -226,57 +252,71 @@ callback(null, ALLOWED_ORIGINS.includes(origin));
 
 ---
 
-### #10 多处静默吞错误，无日志
+### #10 多处静默吞错误，无日志 ⚠️ 部分修复
 
 - **严重程度**: 🟠 高
 - **文件**: `server/src/middleware/auth.ts:32-34, 52-53, 70-71`、`server/src/middleware/admin.ts:27-29`
+- **状态**: ⚠️ 部分修复 — commit 22d1dc8（auth.ts ✅ 已修复，**admin.ts ❌ 遗漏**）
 - **问题描述**: JWT 验证失败、数据库错误等完全无日志记录。生产环境排查问题极为困难——无法区分 token 过期、签名不匹配还是数据库宕机。
 
-**当前代码**:
+**auth.ts 已修复**:
 ```typescript
-// auth.ts:32-34
-} catch {
-  res.status(401).json({ error: 'Invalid token' });  // 无日志
-}
-
-// auth.ts:52-53
-} catch {
-  res.status(500).json({ error: 'Database error' });  // 无日志
-}
-
-// auth.ts:70-71
-} catch {
-  // Invalid token — continue as anonymous  // 完全静默
-}
-```
-
-**修复建议**: 添加 `console.warn`/`console.error`：
-```typescript
+// auth.ts:32-34 — 已添加 console.warn
 } catch (err) {
   console.warn('[Auth] JWT verification failed:', err instanceof Error ? err.message : err);
   res.status(401).json({ error: 'Invalid token' });
 }
+
+// auth.ts:52-53 — 已添加 console.error
+} catch (err) {
+  console.error('[Auth] Database lookup failed:', err instanceof Error ? err.message : err);
+  res.status(500).json({ error: 'Database error' });
+}
+
+// auth.ts:70-71 — 已添加 console.warn
+} catch (err) {
+  console.warn('[Auth] Optional auth token invalid:', err instanceof Error ? err.message : err);
+}
 ```
+
+**admin.ts 仍遗漏**:
+```typescript
+// admin.ts:27-29 — 仍未添加日志
+} catch {
+  res.status(500).json({ error: 'Database error' });  // ❌ 无 console.error
+}
+```
+
+**仍需修复**: 在 `server/src/middleware/admin.ts:27` 添加 `console.error('[Admin] Database lookup failed:', err instanceof Error ? err.message : err);`
 
 ---
 
-### #11 缺少关键数据库索引 — 多数查询走全表扫描
+### #11 缺少关键数据库索引 — 多数查询走全表扫描 ✅ 已修复
 
 - **严重程度**: 🟠 高
-- **文件**: `server/src/models/database.ts:52-232`
+- **文件**: `server/src/models/database.ts:311-314`
+- **状态**: ✅ 已修复 — commit 22d1dc8
 - **问题描述**: 整个 schema 仅 1 个显式索引（`idx_notif_user`）。以下高频查询列无索引：
 
-| 表 | 缺失索引 | 影响 |
-|:---|:---|:---|
-| `music` | `(story_id, created_at DESC)` | **最关键** — 每条故事都查"最新音乐" |
-| `stories` | `(user_id)` | 用户故事列表、admin 查询 |
-| `stories` | `(created_at DESC)` | 首页排序 |
-| `messages` | `(from_user_id, to_user_id, created_at DESC)` | 对话列表 N×3 子查询 |
-| `messages` | `(to_user_id, is_read)` | 未读计数 |
-| `music_usage` | `(user_id, used_at)` | 用量历史 |
-| `orders` | `(user_id, status)` | 订阅检查 |
+| 表 | 缺失索引 | 影响 | 状态 |
+|:---|:---|:---|:---|
+| `music` | `(story_id, created_at DESC)` | **最关键** — 每条故事都查"最新音乐" | ✅ 已添加 `idx_music_story_created` |
+| `stories` | `(user_id)` | 用户故事列表、admin 查询 | ✅ 已添加 `idx_stories_user_created`（含 created_at DESC） |
+| `messages` | `(from_user_id, to_user_id, created_at DESC)` | 对话列表 N×3 子查询 | ✅ 已添加 `idx_messages_conversation` |
+| `likes` | `(target_type, target_id)` | 点赞查询 | ✅ 已添加 `idx_likes_target` |
+| `messages` | `(to_user_id, is_read)` | 未读计数 | ⏳ 暂缓 |
+| `music_usage` | `(user_id, used_at)` | 用量历史 | ⏳ 暂缓 |
+| `orders` | `(user_id, status)` | 订阅检查 | ⏳ 暂缓 |
 
-**修复建议**: 按上表添加复合索引。`music(story_id, created_at DESC)` 这一项带来的性能提升最显著。
+**修复后代码**（database.ts:311-314）:
+```sql
+CREATE INDEX IF NOT EXISTS idx_music_story_created ON music(story_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(from_user_id, to_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_stories_user_created ON stories(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_likes_target ON likes(target_type, target_id);
+```
+
+**验证结果**: ✅ 已确认 — 4个核心索引已添加，覆盖最关键的查询路径。
 
 ---
 
@@ -323,23 +363,28 @@ LEFT JOIN users u ON s.user_id = u.id
 
 ---
 
-### #14 story 路由路径重复
+### #14 story 路由路径重复 ✅ 已修复
 
 - **严重程度**: 🟠 高
-- **文件**: `server/src/routes/story.ts:76,88` + `server/src/index.ts:100`
-- **问题描述**: index.ts 挂载于 `/api/story`，但 story.ts 内 `router.get('/story/tags')` 导致实际路径为 `/api/story/story/tags`（`story` 重复）。若前端恰好请求这些路径，说明前端已适配；否则这些端点可能从未被调用。
+- **文件**: `server/src/routes/story.ts:75,87` + `server/src/index.ts:100`
+- **状态**: ✅ 已修复 — commit 22d1dc8
+- **问题描述**: index.ts 挂载于 `/api/story`，但 story.ts 内 `router.get('/story/tags')` 导致实际路径为 `/api/story/story/tags`（`story` 重复）。
 
-**当前代码**:
+**原代码**:
 ```typescript
-// index.ts
-app.use('/api/story', storyRoutes);
-
 // story.ts
-router.get('/story/tags', ...)    // 变成 /api/story/story/tags ❓
-router.get('/story/search', ...)  // 变成 /api/story/story/search ❓
+router.get('/story/tags', ...)    // 变成 /api/story/story/tags
+router.get('/story/search', ...)  // 变成 /api/story/story/search
 ```
 
-**修复建议**: 改为 `router.get('/tags', ...)` 和 `router.get('/search', ...)`
+**修复后**:
+```typescript
+// story.ts
+router.get('/tags', ...)    // 正确路径: /api/story/tags
+router.get('/search', ...)  // 正确路径: /api/story/search
+```
+
+**验证结果**: ✅ 已确认 — story.ts:75 `/tags`、story.ts:87 `/search`。
 
 ---
 
@@ -487,21 +532,24 @@ await client.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
 
 ---
 
-### #25 Hero 图片删除错误完全丢弃
+### #25 Hero 图片删除错误完全丢弃 ✅ 已修复
 
 - **严重程度**: 🟡 中
 - **文件**: `server/src/routes/admin/hero.ts:44`
+- **状态**: ✅ 已修复 — commit 22d1dc8
 - **问题描述**: R2 文件删除失败的错误被完全丢弃，没有任何日志记录。管理员不会知道旧文件仍在占用存储空间。
 
-**当前代码**:
+**原代码**:
 ```typescript
 deleteFromR2(row.value).catch(() => {});
 ```
 
-**修复建议**: 至少记录错误：
+**修复后**:
 ```typescript
 deleteFromR2(row.value).catch(err => console.error('[Hero] Delete old image failed:', err));
 ```
+
+**验证结果**: ✅ 已确认 — hero.ts:44 现在记录了 R2 删除失败错误。
 
 ---
 
@@ -690,18 +738,24 @@ type Args = any[];
 ---
 ## 开发者修复回复（commit 22d1dc8 + 2eeb6ec）
 
-### 已修复（7 项）
+### 已修复（8 项）
 
-| # | 问题 | 修复 |
+| # | 问题 | 修复 | 验证 |
+|:---|:---|:---|:---|
+| #1 | 评论删除未清理 likes | ✅ DELETE likes BEFORE DELETE comments | ✅ 已确认 — comment.ts:66 |
+| #4 | 重复子查询 | ✅ 删除重复行 | ✅ 已确认 — story.ts:49-51 三个子查询各取不同字段 |
+| #5 | 可视化器 Audio 引用错误 | ✅ 使用 audioManager.getState().getAudio() | ✅ 已确认 — MusicPlayer.tsx:181-182 |
+| #7 | setImmediate 无 catch | ✅ comment/follow/like 三处加 .catch() | ✅ 已确认 — 三处均有 console.error |
+| #10 | 中间件无错误日志 | ⚠️ auth.ts 3 处加 console.warn/error | ⚠️ 部分修复 — auth.ts ✅，**admin.ts:27 遗漏** ❌ |
+| #11 | 缺少关键索引 | ✅ 4 个关键索引 (music/stories/messages/likes) | ✅ 已确认 — database.ts:311-314 |
+| #14 | 路由 path 重复 | ✅ /story/tags→/tags, /story/search→/search | ✅ 已确认 — story.ts:75/87 |
+| #25 | hero 删除错误丢弃 | ✅ .catch(err => console.error(...)) | ✅ 已确认 — hero.ts:44 |
+
+### 🔧 仍需修复
+
+| # | 问题 | 说明 |
 |:---|:---|:---|
-| #1 | 评论删除未清理 likes | ✅ DELETE likes BEFORE DELETE comments |
-| #4 | 重复子查询 | ✅ 删除重复行 |
-| #5 | 可视化器 Audio 引用错误 | ✅ 使用 audioManager.getState().getAudio() |
-| #7 | setImmediate 无 catch | ✅ comment/follow/like 三处加 .catch() |
-| #10 | 中间件无错误日志 | ✅ auth.ts 3 处加 console.warn/error |
-| #11 | 缺少关键索引 | ✅ 4 个关键索引 (music/stories/messages/likes) |
-| #14 | 路由 path 重复 | ✅ /story/tags→/tags, /story/search→/search |
-| #25 | hero 删除错误丢弃 | ✅ .catch(err => console.error(...)) |
+| **#10 (遗漏)** | `server/src/middleware/admin.ts:27-28` | `catch {}` 仍为空，需添加 `console.error('[Admin] Database lookup failed:', err instanceof Error ? err.message : err);` |
 
 ### 记录但暂缓（设计权衡/规模依赖）
 
@@ -713,4 +767,7 @@ type Args = any[];
 | #9 | 支付错误泄露 | 支付宝 SDK 错误对开发者有用，不影响安全性 |
 | #12/#13 | N+1/分页 | libsql GROUP BY 问题 + 当前规模无需 |
 | #15 | admin 删用户 R2 | 管理员工具，非用户面 |
-| #16-#38 | 其余 | 代码质量/维护性建议，已纳入技术债务 |
+| #16-#24, #26-#38 | 其余 | 代码质量/维护性建议，已纳入技术债务 |
+
+### #10 遗漏项修复（commit 6c94d77）
+admin.ts:27 空 catch → 添加 console.error 日志。
