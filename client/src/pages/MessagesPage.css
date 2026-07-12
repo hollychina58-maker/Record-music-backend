@@ -46,10 +46,6 @@
   background: var(--paper-aged);
 }
 
-.msg-item:hover {
-  background: rgba(28,28,28,0.03);
-}
-
 .msg-avatar {
   width: 44px;
   height: 44px;

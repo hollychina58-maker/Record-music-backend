@@ -240,3 +240,15 @@
   transform: scale(0.92);
   transition: transform 0.12s var(--ease-spring);
 }
+
+.user-stats {
+  opacity: 0;
+  animation: fadeInScale 0.4s var(--ease-spring) 0.4s forwards;
+}
+
+@keyframes followPopIn {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.15); }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}

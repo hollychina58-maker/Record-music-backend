@@ -99,10 +99,12 @@ export function MessageDetailPage() {
       </header>
 
       <div className="chat-messages">
-        {messages.map(m => {
+        {messages.map((m, i) => {
           const isMine = m.from_user_id === currentUser?.id;
           return (
-            <div key={m.id} className={`chat-bubble-wrap${isMine ? ' chat-bubble-wrap--mine' : ''}`}>
+            <div key={m.id}
+              className={`chat-bubble-wrap${isMine ? ' chat-bubble-wrap--mine' : ''}`}
+              style={{ animationDelay: `${Math.min(i * 0.05, 0.8)}s` }}>
               <div className={`chat-bubble${isMine ? ' chat-bubble--mine' : ''}`}>
                 {m.content}
               </div>

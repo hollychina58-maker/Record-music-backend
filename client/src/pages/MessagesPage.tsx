@@ -55,8 +55,9 @@ export function MessagesPage() {
           </div>
         ) : (
           <div className="msg-list">
-            {conversations.map(c => (
-              <Link key={c.id} to={'/messages/' + c.id} className="msg-item">
+            {conversations.map((c, i) => (
+              <Link key={c.id} to={'/messages/' + c.id} className="msg-item"
+                style={{ animationDelay: `${Math.min(i * 0.04, 0.6)}s` }}>
                 <div className="msg-avatar">{c.nickname?.charAt(0) || '?'}</div>
                 <div className="msg-info">
                   <div className="msg-top">
