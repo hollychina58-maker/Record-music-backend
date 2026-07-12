@@ -29,7 +29,8 @@ export async function authMiddleware(
   let decoded: { userId: number };
   try {
     decoded = jwt.verify(rawToken, secret) as { userId: number };
-  } catch {
+  } catch (err) {
+    console.warn('[Auth] JWT verification failed:', err instanceof Error ? err.message : err);
     res.status(401).json({ error: 'Invalid token' });
     return;
   }
@@ -49,7 +50,8 @@ export async function authMiddleware(
     }
     req.userId = decoded.userId;
     next();
-  } catch {
+  } catch (err) {
+    console.error('[Auth] Database lookup failed:', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'Database error' });
   }
 }
@@ -67,7 +69,8 @@ export async function optionalAuthMiddleware(
       try {
         const decoded = jwt.verify(token, secret) as { userId: number };
         req.userId = decoded.userId;
-      } catch {
+      } catch (err) {
+        console.warn('[Auth] Optional auth token invalid:', err instanceof Error ? err.message : err);
         // Invalid token — continue as anonymous
       }
     }

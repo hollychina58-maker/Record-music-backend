@@ -307,6 +307,11 @@ export async function initDatabase(): Promise<void> {
   }
 
   await client.execute('PRAGMA foreign_keys = ON;');
+  // Essential indexes for common query paths
+  await client.execute('CREATE INDEX IF NOT EXISTS idx_music_story_created ON music(story_id, created_at DESC)').catch(() => {});
+  await client.execute('CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(from_user_id, to_user_id, created_at DESC)').catch(() => {});
+  await client.execute('CREATE INDEX IF NOT EXISTS idx_stories_user_created ON stories(user_id, created_at DESC)').catch(() => {});
+  await client.execute('CREATE INDEX IF NOT EXISTS idx_likes_target ON likes(target_type, target_id)').catch(() => {});
   console.log('[DB] Database initialized');
 }
 
