@@ -372,3 +372,521 @@
 
 ### P1/P2 记录
 剩余 17 项（#5-#22）中大部分为设计决策（CheckoutPage 深色主题刻意设计、Admin 独立风格、StoryPoster 保留白字等），已纳入技术债务。空状态/错误状态组件化作为后续统一迭代。
+
+---
+
+# 动效系统专项审核（2026-07-12）
+
+> **触发原因**: 用户反馈整体 UI "动感不足"
+> **审核方法**: 逐页扫描 animation/keyframes/transition 使用密度 + 交互场景动效缺口检查 + 页面切换机制检查
+
+---
+
+## 📊 动效热力图
+
+按每页 CSS 中 `animation`/`@keyframes`/`transition` 声明数量分级：
+
+| 热度 | 页面/组件 | 动效声明数 | 状态 |
+|:---|:---|:---:|:---|
+| 🔥🔥🔥 | **HomePage** | 32 | 丰富 — bgBreath + inkDropBloom + cardReveal + shimmer + vizPulse + cardIn |
+| 🔥🔥🔥 | **CreateStoryPage** | 18 | 丰富 — fadeIn + voicePulse + voiceRing + tab 切换动画 |
+| 🔥🔥🔥 | **BurnConfirmModal** | 15 | 优秀 — burnFadeIn + corePulse + emberOrbit + textFadeInOut |
+| 🔥🔥 | **StoryDetailPage** | 17 | 良好 — fadeInScale + articleReveal + inkFlow + 评论列表动画 |
+| 🔥🔥 | **MySpacePage** | 17 | 良好 — cardReveal + shimmer + fadeInUp + tab 切换过渡 |
+| 🔥 | **ProfilePage** | 12 | 尚可 — bgBreath + inkBloom + 多处 transition |
+| 🔥 | **LoginPage** | 11 | 尚可 — bgBreath + fadeInUp + 按钮动效 |
+| 🔥 | **CheckoutPage** | 6 | 偏弱 — 过渡存在但用 `ease` 非项目缓动 |
+| 🔥 | **PhotoInspirationPage** | 4 | 偏弱 — spin + fadeInUp 仅此 |
+| ❄️ | **UserProfilePage** | 2 | **接近死页** — 仅 2 个 fast transition |
+| ❄️ | **MessagesPage** | 1 | **死页** — 仅 1 个 background transition |
+| ❄️ | **MessageDetailPage** | 1 | **死页** — 仅 1 个 opacity transition |
+| 🧊 | **App.tsx（页面切换）** | 0 | **零页面过渡** — 无 AnimatePresence/CSSTransition/framer-motion |
+
+---
+
+## 🔴 根因诊断：为什么感觉"动感不足"
+
+### 根因 #1：页面切换无动画（致命）
+
+用户从首页点进故事详情、从消息列表进入对话、从我的空间切换到他人主页——**每一次路由跳转都是生硬的瞬间切换**。在叙事型应用中，这尤其破坏沉浸感。
+
+```
+当前流程：
+  首页 → [硬切] → 故事详情 → [硬切] → 用户主页 → [硬切] → 消息列表
+  所有过渡时间：0ms
+
+理想流程：
+  首页 → [300ms 淡出+微上浮] → 故事详情入场 → [300ms 淡出] → 返回首页
+  每次切换有 0.3-0.5s 的过渡，大脑感知到"页面变化"而非"闪烁"
+```
+
+**代码现状**: `App.tsx` 中没有任何动画库或过渡机制，`package.json` 也未安装 `framer-motion`、`react-transition-group` 等。
+
+---
+
+### 根因 #2：MessagesPage 和 MessageDetailPage 是死页
+
+这两个页面的 CSS 各只有**一个** transition 声明。用户访问消息功能时——本应是"收到来信"的温馨时刻——看到的却是完全静态的页面。
+
+| 缺失项 | MessagesPage | MessageDetailPage |
+|:---|:---:|:---:|
+| 对话列表项入场动画 | ❌ | — |
+| 消息气泡入场（类似聊天） | — | ❌ |
+| hover 时行背景过渡 | ❌ | — |
+| 未读→已读状态过渡 | ❌ | ❌ |
+| 发送按钮按压反馈 | — | ❌ |
+
+---
+
+### 根因 #3：UserProfilePage 静态
+
+访问他人主页是社交产品的核心体验。当前页面仅 2 个过渡声明，用户头像、统计数据、故事列表全部在瞬间完成加载——缺少"探索和发现"的仪式感。
+
+---
+
+### 根因 #4：非首屏滚动渐显缺失
+
+首屏卡片有 `cardReveal` + `animationDelay` stagger 是好的。但折叠线以下的内容在 mount 时动画已完成。用户滚动过去时，所有卡片已经静立不动——这是 `design-style.md` 中已记录的 P2 问题（#16），但它是"动感不足"感知的重要来源：
+
+> 用户在滚动中期待持续看到"新内容正在出现"的信号，而非"内容早就存在，只是我一直没看到"。
+
+---
+
+### 根因 #5：微交互覆盖不全
+
+| 交互 | HomePage | StoryDetail | Messages | Profile | MySpace |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| 卡片 hover | ✅ inkBleed + 上浮 | ✅ | ❌ | ❌ | ✅ |
+| 按钮 :active | ✅ scale(0.98) | 🟡 | ❌ | 🟡 | 🟡 |
+| 标签/tab 切换 | ✅ 下划线滑动 | — | — | — | ✅ |
+| 点赞反馈 | ✅ scale 动画 | ✅ | — | — | — |
+| 关注反馈 | — | — | — | ❌ 无动画 | — |
+| Toast 入场 | ✅ toastEnter | ✅ | ✅ | ✅ | ✅ |
+| Modal 入场 | — | — | — | — | — |
+
+---
+
+## 🟠 动效优化方案（具体可执行代码）
+
+> 以下代码均基于当前源码的实际类名和文件结构编写，修复者可直接参照应用。
+
+---
+
+### #23 🔴 页面切换过渡动画
+
+**现状**: `Layout.tsx:103` 已有 `key={location.pathname}` 和 `className="page-transition-enter"`，但对应的 CSS 动画未定义。`index.css:158-180` 有闲置的 `.page-enter`/`.page-exit` 过渡类。
+
+**只需改 1 个文件，7 行 CSS，零 TSX 改动。**
+
+**文件**: `client/src/index.css`
+**位置**: 第 180 行 `}`（`.page-exit-active` 块结束）之后追加
+
+```css
+/* Page mount transition — triggers on every route change via Layout's key={pathname} */
+.page-transition-enter {
+  animation: pageIn 0.4s var(--ease-out-expo);
+}
+
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+```
+
+**原理**: `Layout.tsx:103` `<div className="app-content" key={location.pathname}>` — 每次路由切换，React 卸载旧 DOM、挂载新 DOM，`.page-transition-enter` 上的 `animation` 自动触发。无需任何 JS 改动。
+
+**风险**: ⚪ 零风险 — 基础设施已就绪，仅补充 CSS。
+
+---
+
+### #24 🔴 MessagesPage 对话列表动效化
+
+**现状**: 仅 1 个 `background` transition。当前使用类名 `.msg-item`（非 `messages-list-item`）。
+
+**文件 1/2**: `client/src/pages/MessagesPage.css` — 替换 `.msg-item` 规则 + 追加
+
+当前第 17-26 行 `.msg-item` 规则：
+```css
+.msg-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px solid rgba(28,28,28,0.06);
+  transition: background var(--transition-fast);
+}
+```
+
+改为：
+```css
+.msg-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px solid rgba(28,28,28,0.06);
+  transition: background var(--transition-fast);
+
+  /* Entrance stagger */
+  opacity: 0;
+  animation: msgItemIn 0.45s var(--ease-out-expo) forwards;
+}
+.msg-item:nth-child(1)  { animation-delay: 0.04s; }
+.msg-item:nth-child(2)  { animation-delay: 0.08s; }
+.msg-item:nth-child(3)  { animation-delay: 0.12s; }
+.msg-item:nth-child(4)  { animation-delay: 0.16s; }
+.msg-item:nth-child(5)  { animation-delay: 0.20s; }
+.msg-item:nth-child(6)  { animation-delay: 0.24s; }
+.msg-item:nth-child(7)  { animation-delay: 0.28s; }
+.msg-item:nth-child(8)  { animation-delay: 0.32s; }
+.msg-item:nth-child(9)  { animation-delay: 0.36s; }
+.msg-item:nth-child(10) { animation-delay: 0.40s; }
+
+@keyframes msgItemIn {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Enhanced hover — tea-stain warmth */
+.msg-item:hover {
+  background: var(--paper-aged);
+  transition: background 0.35s var(--ease-out-expo);
+}
+
+/* Unread indicator reveal on hover */
+.msg-item:has(.msg-badge) {
+  border-left: 2px solid transparent;
+  transition: border-color 0.4s var(--ease-out-expo);
+}
+.msg-item:has(.msg-badge):hover {
+  border-left-color: var(--seal-red);
+}
+```
+
+**文件 2/2**: `client/src/pages/MessagesPage.tsx` 第 58 行 — 如果对话超过 10 条，nth-child 不够。改为 JS 动态注入延迟：
+
+```tsx
+// 第 58 行，将：
+{conversations.map(c => (
+
+// 改为：
+{conversations.map((c, i) => (
+  <Link key={c.id} to={'/messages/' + c.id} className="msg-item"
+    style={{ animationDelay: `${Math.min(i * 0.04, 0.6)}s` }}
+  >
+```
+
+**风险**: ⚪ 低风险 — 纯 CSS animation，不涉及业务逻辑。
+
+---
+
+### #25 🔴 MessageDetailPage 消息气泡入场
+
+**现状**: 仅 1 个 `opacity` transition。当前类名 `.chat-bubble-wrap`、`.chat-send-btn`。
+
+**文件 1/2**: `client/src/pages/MessageDetailPage.css` — 在文件末尾追加
+
+```css
+/* ============================================
+   Message bubble entrance animation
+   ============================================ */
+.chat-bubble-wrap {
+  opacity: 0;
+  animation: bubbleIn 0.4s var(--ease-out-expo) forwards;
+}
+
+.chat-bubble-wrap--mine {
+  animation-name: bubbleInRight;
+}
+
+@keyframes bubbleIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bubbleInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Send button press feedback */
+.chat-send-btn:not(:disabled):active {
+  transform: scale(0.93);
+  transition: transform 0.12s var(--ease-spring);
+}
+
+/* Input focus glow — reuse seal-red glow from design tokens */
+.chat-input:focus {
+  border-color: var(--ink-faint);
+  box-shadow: 0 0 0 3px var(--seal-glow);
+  transition: border-color 0.25s var(--ease-out-expo),
+              box-shadow 0.25s var(--ease-out-expo);
+}
+```
+
+**文件 2/2**: `client/src/pages/MessageDetailPage.tsx` 第 101-111 行 — 为气泡加递增延迟
+
+```tsx
+// 将：
+{messages.map(m => {
+
+// 改为：
+{messages.map((m, i) => {
+  const isMine = m.from_user_id === currentUser?.id;
+  return (
+    <div key={m.id}
+      className={`chat-bubble-wrap${isMine ? ' chat-bubble-wrap--mine' : ''}`}
+      style={{ animationDelay: `${Math.min(i * 0.03, 0.6)}s` }}
+    >
+      <div className={`chat-bubble${isMine ? ' chat-bubble--mine' : ''}`}>
+        {m.content}
+      </div>
+    </div>
+  );
+})}
+```
+
+**风险**: ⚪ 低风险 — 纯 CSS animation。
+
+---
+
+### #26 🟡 UserProfilePage 入场动效
+
+**现状**: 仅 2 个 transition。当前类名 `.user-profile-card`、`.user-stats`、`.user-story-card`。
+
+**文件**: `client/src/pages/UserProfilePage.css` — 在文件末尾追加（复用 `theme.css` 已有的 `fadeInUp`/`fadeInScale`/`cardReveal` keyframes）
+
+```css
+/* ============================================
+   Entrance animations
+   ============================================ */
+
+/* Profile card gentle reveal */
+.user-profile-card {
+  opacity: 0;
+  animation: fadeInUp 0.6s var(--ease-out-expo) 0.1s forwards;
+}
+
+/* Stats fade in after card */
+.user-stats {
+  opacity: 0;
+  animation: fadeInScale 0.4s var(--ease-spring) 0.35s forwards;
+}
+
+/* Story cards staggered reveal */
+.user-story-card {
+  opacity: 0;
+  animation: cardReveal 0.5s var(--ease-out-expo) forwards;
+}
+.user-story-card:nth-child(1)  { animation-delay: 0.15s; }
+.user-story-card:nth-child(2)  { animation-delay: 0.22s; }
+.user-story-card:nth-child(3)  { animation-delay: 0.29s; }
+.user-story-card:nth-child(4)  { animation-delay: 0.36s; }
+.user-story-card:nth-child(5)  { animation-delay: 0.43s; }
+.user-story-card:nth-child(6)  { animation-delay: 0.50s; }
+.user-story-card:nth-child(7)  { animation-delay: 0.57s; }
+.user-story-card:nth-child(8)  { animation-delay: 0.64s; }
+.user-story-card:nth-child(9)  { animation-delay: 0.71s; }
+.user-story-card:nth-child(10) { animation-delay: 0.78s; }
+
+/* Follow button press + pop feedback */
+.user-follow-btn:not(:disabled):active {
+  transform: scale(0.92);
+  transition: transform 0.12s var(--ease-spring);
+}
+
+/* Follow success pop (JS adds .just-followed class briefly) */
+.user-follow-btn.just-followed {
+  animation: followPopIn 0.4s var(--ease-spring);
+}
+
+@keyframes followPopIn {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.15); }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+```
+
+**JS 配合**（可选）: 在 `UserProfilePage.tsx` 关注成功回调中触发弹簧动画：
+
+```tsx
+// 第 105 行关注成功后追加：
+setFollowing(d.following ?? false);
+const btn = document.activeElement as HTMLElement;
+btn?.classList.add('just-followed');
+setTimeout(() => btn?.classList.remove('just-followed'), 400);
+```
+
+**风险**: ⚪ 低风险 — 复用 `theme.css` 已有 keyframes，无重复定义。
+
+---
+
+### #27 🟡 滚动触发渐显（P2，延续 #16）
+
+**现状**: `useScrollReveal` Hook 存在于 `client/src/hooks/useScrollReveal.ts` 但**未被任何页面调用**。需要接入 HomePage。
+
+**文件 1/3**: `client/src/pages/HomePage.tsx`
+
+1. 文件顶部（约第 8 行 import 区）追加：
+```tsx
+import { useScrollReveal } from '../hooks/useScrollReveal';
+```
+
+2. 组件函数体内（约第 47 行，`useEffect` 之后）追加：
+```tsx
+// 滚动渐显：折叠线以下卡片进入视口时触发入场
+useScrollReveal('.story-card.reveal-on-scroll');
+```
+
+3. 卡片渲染处（约第 155 行），给每张卡片加 `reveal-on-scroll` 类，用 `--reveal-delay` 替代 `animationDelay`：
+```tsx
+// 原来：
+<div className={`story-card${i === 0 ? ' story-card--hero' : ''}`}
+  style={{ animationDelay: `${0.1 + i * 0.06}s` } as React.CSSProperties}>
+
+// 改为：
+<div className={`story-card reveal-on-scroll${i === 0 ? ' story-card--hero' : ''}`}
+  style={{ '--reveal-delay': `${0.1 + i * 0.06}s` } as React.CSSProperties}>
+```
+
+**文件 2/3**: `client/src/pages/HomePage.css` — `.story-card` 动画改为 transition + Observer 方案
+
+```css
+/* .story-card — 移除原有 animation 声明，改为： */
+.story-card {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.5s var(--ease-out-expo) var(--reveal-delay, 0s),
+    transform 0.5s var(--ease-out-expo) var(--reveal-delay, 0s),
+    box-shadow 0.35s var(--ease-out-expo);
+}
+
+/* IntersectionObserver 触发后 */
+.story-card.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  /* 重置 transition：去掉 reveal-delay，hover 即时响应 */
+  transition:
+    opacity 0.3s var(--ease-out-expo),
+    transform 0.35s var(--ease-out-expo),
+    box-shadow 0.35s var(--ease-out-expo);
+}
+```
+
+**文件 3/3**: `client/src/hooks/useScrollReveal.ts` — 改为 `requestAnimationFrame` 确保 DOM 已渲染
+
+```typescript
+import { useEffect } from 'react';
+
+/** Observe elements by CSS selector — triggers .is-visible on intersection */
+export function useScrollReveal(selector: string, threshold = 0.1) {
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      const els = document.querySelectorAll<HTMLElement>(selector);
+      if (!els.length) return;
+
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        els.forEach(el => {
+          el.style.opacity = '1';
+          el.style.transform = 'none';
+        });
+        return;
+      }
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('is-visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold, rootMargin: '0px 0px -40px 0px' },
+      );
+
+      els.forEach(el => observer.observe(el));
+    });
+
+    return () => cancelAnimationFrame(raf);
+  }, [selector, threshold]);
+}
+```
+
+**⚠️ 已知风险**: 首屏卡片 `opacity: 0` + Observer 异步触发可能导致首帧闪烁。如出现此问题，首屏卡片（`i < 4`）可保留原有 `animation: cardReveal` 方案，仅折叠线以下卡片使用 transition+Observer。确保 `prefers-reduced-motion` 用户直接看到全部内容。
+
+**风险**: 🟡 中风险 — 改变了入场动画机制，需验证首屏无闪现。
+
+---
+
+### #28 🟡 关注按钮弹簧反馈
+
+已在 #26 的 `UserProfilePage.css` 改动中一并包含（`.user-follow-btn.just-followed` + `@keyframes followPopIn`）。不再需要单独修改。
+
+---
+
+## 📋 动效优先修复路线图
+
+### 第一轮（1-2 天，高收益低风险）
+
+| # | 动作 | 改动范围 | 收益 |
+|:---|:---|:---|:---|
+| **#23** | 添加页面切换过渡动画 | `Layout.tsx` + `index.css` (~15 行) | 🔥🔥🔥 全站受益，零依赖 |
+| **#24** | MessagesPage 列表项入场 + hover | `MessagesPage.css` (~25 行) | 🔥🔥 死页复活 |
+| **#25** | MessageDetailPage 气泡入场 + 发送反馈 | `MessageDetailPage.css` (~30 行) | 🔥🔥 死页复活 |
+
+### 第二轮（3-5 天）
+
+| # | 动作 | 改动范围 |
+|:---|:---|:---|
+| **#26** | UserProfilePage 入场动效 | `UserProfilePage.css` (~20 行) |
+| **#28** | 关注按钮反馈 + 点赞按钮复用 seal 动画 | `UserProfilePage.css` + `ProfilePage.css` |
+| **#27** | 滚动触发渐显（P2 #16） | `useScrollReveal.ts` + `HomePage.tsx/css` |
+
+### 第三轮（后续迭代）
+
+| # | 动作 |
+|:---|:---|
+| **#17-19** | 横向滑动区、漂浮装饰、墨滴路由过渡（`design-style.md` P2 遗留） |
+
+---
+
+## 🔍 动效审核验证（commit 0a9c394 → 当前）
+
+| # | 修复项 | 验证结果 |
+|:---|:---|:---|
+| #1 | VoiceInput.css 11 无效 token | ✅ 全部映射正确 (`--spacing-sm`→`--space-2` 等) |
+| #3 | LikeButton.css 5 硬编码 | ✅ 全部改为 token (`#bbb`→`--ink-faint` 等) |
+| #4 | LanguageSwitcher.css 5 硬编码 | ✅ 全部改为 token (`#444`→`--ink-dark` 等) |
+| #15 | CommentSection 空评论提示 | ✅ 新增 `cmt-empty` + `comment.empty` i18n |
+| #2 | Input.css | ⏭️ 跳过（组件未使用，开发者声明合理） |
+
+### 审核意见
+
+1. **Token 修复质量高** — VoiceInput/LikeButton/LanguageSwitcher 三处映射完全准确，token 语义正确，无副作用
+2. **Input.css 跳过合理** — 该组件确实未被任何表单使用，修复后也会被 tree-shake；应先推广组件使用再修 token
+3. **动效新增建议独立于 token 修复** — #23-#28 均为新增建议，不涉及之前文档的任何条目，全部是 P1/P2 增强
+
+### 动效修复（commit 6308aaf）
+
+| # | 实现 | 状态 |
+|:---|:---|:---|
+| #23 | 页面过渡 pageIn 动画 (Layout key={pathname}) | ✅ |
+| #24 | MessagesPage 列表项 msgItemIn stagger | ✅ |
+| #25 | MessageDetailPage 气泡 bubbleIn + 发送按钮active | ✅ |
+| #26 | UserProfilePage 卡片+故事 staggered reveal | ✅ |
+| #27 | 滚动渐显 | 🔜 跳过 — 存在首帧闪现问题，需 useLayoutEffect |
+
+**理由**: #27 的 `opacity: 0` + `IntersectionObserver` 方案在 `useEffect`（paint 后触发）中会闪现不可见帧，需改用 `useLayoutEffect` 同步检查可见性，属单独任务。
