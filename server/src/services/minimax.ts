@@ -308,7 +308,7 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
     prompt,
     is_instrumental: isInstrumental,
     output_format: 'url',
-    stream: true, // Faster E2E latency: 60s→25s
+    stream: true, // MiniMax server-side acceleration (not SSE — response is still standard JSON)
     audio_setting: {
       sample_rate: 44100,
       bitrate: 256000,
@@ -316,7 +316,17 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
     },
   };
 
-  if (isCover) {
+  if (isCover && options.audioRefUrl) {
+    // Validate reference audio URL is accessible before sending to MiniMax
+    try {
+      const head = await axios.head(options.audioRefUrl, { timeout: 10000 });
+      const ct = String(head.headers['content-type'] || '');
+      if (!ct.startsWith('audio/') && !ct.startsWith('application/octet-stream')) {
+        throw new Error(`Invalid audio content-type: ${ct}`);
+      }
+    } catch (err: any) {
+      throw new Error('Reference audio URL is not accessible: ' + (err.message || ''));
+    }
     payload.audio_url = options.audioRefUrl;
   }
 
@@ -338,30 +348,39 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
   // Re-assign prompt (string immutable, += creates new string)
   payload.prompt = prompt;
 
-  // Timeout: stream mode is faster
+  // Timeout: cover model needs more time (reference audio processing)
   const timeout = isCover ? 240000 : (durationSec <= 30 ? 120000 : 180000);
+  const url = `${process.env.MINIMAX_API_URL || 'https://api.minimaxi.com/v1'}/music_generation`;
 
-  const response = await axios.post<MiniMaxMusicResponse>(
-    `${process.env.MINIMAX_API_URL || 'https://api.minimaxi.com/v1'}/music_generation`,
-    payload,
-    {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      timeout,
+  // Exponential backoff retry (3 attempts) for transient MiniMax failures
+  const MAX_RETRIES = 3;
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await axios.post<MiniMaxMusicResponse>(url, payload, {
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        timeout,
+      });
+      // Success — exit retry loop
+      if (response.data.base_resp && response.data.base_resp.status_code !== 0) {
+        throw new Error(response.data.base_resp.status_msg || 'MiniMax API error');
+      }
+      if (!response.data.data?.audio) {
+        throw new Error('No audio URL in response');
+      }
+      return { audioUrl: response.data.data.audio };
+    } catch (err: any) {
+      lastError = err;
+      // Only retry on transient errors (5xx, network, timeout, rate limit)
+      const status = err?.response?.status;
+      const isTransient = !status || status >= 500 || status === 429;
+      if (!isTransient || attempt === MAX_RETRIES - 1) break;
+      const delay = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+      console.warn(`[MiniMax] Attempt ${attempt + 1} failed, retrying in ${delay}ms:`, err.message);
+      await new Promise(r => setTimeout(r, delay));
     }
-  );
-
-  if (response.data.base_resp && response.data.base_resp.status_code !== 0) {
-    throw new Error(response.data.base_resp.status_msg || 'MiniMax API error');
   }
-
-  if (!response.data.data?.audio) {
-    throw new Error('No audio URL in response');
-  }
-
-  return { audioUrl: response.data.data.audio };
+  throw lastError || new Error('MiniMax API failed after retries');
 }
 
 export async function downloadMusicFile(fileUrl: string, storyId: number): Promise<string> {

@@ -29,34 +29,43 @@ export async function uploadToR2(
   const bucket = process.env.R2_BUCKET_NAME;
   if (!client || !bucket) return sourceUrl; // fallback: return original URL
 
-  try {
-    // Download from source (MiniMax CDN)
-    const response = await axios.get(sourceUrl, {
-      responseType: 'arraybuffer',
-      timeout: 30000,
-    });
+  // Retry up to 2 times for transient network errors
+  const MAX_RETRIES = 2;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      // Download from source (MiniMax CDN)
+      const response = await axios.get(sourceUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+      });
 
-    // Upload to R2
-    await client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: bucketKey,
-        Body: Buffer.from(response.data),
-        ContentType: contentType,
-        CacheControl: 'public, max-age=31536000, immutable',
-      }),
-    );
+      // Upload to R2
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: bucketKey,
+          Body: Buffer.from(response.data),
+          ContentType: contentType,
+          CacheControl: 'public, max-age=31536000, immutable',
+        }),
+      );
 
-    // Return public URL (if you have a custom domain, use R2_PUBLIC_URL)
-    const publicBase = process.env.R2_PUBLIC_URL
-      || `https://${bucket}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-    const r2Url = `${publicBase}/${bucketKey}`;
-    console.log('[R2] Uploaded:', bucketKey);
-    return r2Url;
-  } catch (err) {
-    console.error('[R2] Upload failed for', bucketKey, ':', err instanceof Error ? err.message : err);
-    return sourceUrl; // fallback to original URL on failure
+      // Return public URL (if you have a custom domain, use R2_PUBLIC_URL)
+      const publicBase = process.env.R2_PUBLIC_URL
+        || `https://${bucket}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+      const r2Url = `${publicBase}/${bucketKey}`;
+      console.log('[R2] Uploaded:', bucketKey);
+      return r2Url;
+    } catch (err) {
+      if (attempt === MAX_RETRIES - 1) {
+        console.error('[R2] Upload failed after', MAX_RETRIES, 'attempts for', bucketKey, ':', err instanceof Error ? err.message : err);
+        return sourceUrl; // fallback to original URL on final failure
+      }
+      console.warn('[R2] Upload attempt', attempt + 1, 'failed, retrying:', err instanceof Error ? err.message : err);
+      await new Promise(r => setTimeout(r, 2000));
+    }
   }
+  return sourceUrl; // unreachable, but satisfies TypeScript
 }
 
 /**

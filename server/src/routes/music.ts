@@ -97,7 +97,7 @@ router.post('/generate', authMiddleware, async (req: AuthRequest, res: Response)
     if (existing) {
       // Stale pending (>3 min old) = abandoned generation — don't reuse, retry instead
       const isStale = existing.status === 'pending'
-        && (Date.now() - new Date(existing.created_at + 'Z').getTime()) > 180000;
+        && (Date.now() - new Date(existing.created_at + 'Z').getTime()) > 300000; // 5 min — covers 120s music + R2 upload
       if (isStale) {
         console.log('[Music] Stale pending record', existing.id, '— resetting for retry');
         await dbRun("UPDATE music SET status = 'failed' WHERE id = ?", [existing.id]);
