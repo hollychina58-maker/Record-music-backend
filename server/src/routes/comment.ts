@@ -48,9 +48,10 @@ router.post('/stories/:storyId/comments', optionalAuthMiddleware, async (req: Au
 
   // Notify story author (async)
   if (req.userId && story.user_id && story.user_id !== req.userId) {
-    setImmediate(async () => {
-      await dbRun('INSERT INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
-        [story.user_id, 'comment_story', parseInt(storyId, 10), req.userId!]);
+    setImmediate(() => {
+      dbRun('INSERT INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
+        [story.user_id!, 'comment_story', parseInt(storyId, 10), req.userId!])
+        .catch(err => console.error('[Comment] Notification insert failed:', err));
     });
   }
 });
@@ -62,6 +63,7 @@ router.delete('/comments/:id', authMiddleware, async (req: AuthRequest, res: Res
   if (comment.user_id === null) { res.status(403).json({ error: 'Guest comments cannot be deleted by users' }); return; }
   if (comment.user_id !== req.userId) { res.status(403).json({ error: 'You can only delete your own comments' }); return; }
 
+  await dbRun("DELETE FROM likes WHERE target_type = 'comment' AND target_id = ?", [id]);
   const result = await dbRun('DELETE FROM comments WHERE id = ?', [id]);
   if (result.changes === 0) { res.status(404).json({ error: 'Comment not found' }); return; }
   res.json({ message: 'Comment deleted successfully' });

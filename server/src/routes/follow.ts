@@ -20,9 +20,10 @@ router.post('/users/:id/follow', authMiddleware, async (req: AuthRequest, res: R
   } else {
     await dbRun('INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)', [followerId, followedId]);
     // Notify followed user (async)
-    setImmediate(async () => {
-      await dbRun('INSERT INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
-        [followedId, 'follow', followerId, followerId]);
+    setImmediate(() => {
+      dbRun('INSERT INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
+        [followedId, 'follow', followerId, followerId])
+        .catch(err => console.error('[Follow] Notification insert failed:', err));
     });
     res.json({ following: true });
   }

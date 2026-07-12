@@ -37,12 +37,15 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
     // Notify story author (async, fire-and-forget)
     if (targetType === 'story') {
-      setImmediate(async () => {
-        const storyRow = await dbGet<{ user_id: number; title: string }>('SELECT user_id, title FROM stories WHERE id = ?', [targetId]);
-        if (storyRow && storyRow.user_id !== userId) {
-          await dbRun('INSERT INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
-            [storyRow.user_id, 'like_story', targetId, userId]);
-        }
+      setImmediate(() => {
+        dbGet<{ user_id: number }>('SELECT user_id FROM stories WHERE id = ?', [targetId])
+          .then(storyRow => {
+            if (storyRow && storyRow.user_id !== userId) {
+              return dbRun('INSERT INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
+                [storyRow.user_id, 'like_story', targetId, userId]);
+            }
+          })
+          .catch(err => console.error('[Like] Notification insert failed:', err));
       });
     }
   }

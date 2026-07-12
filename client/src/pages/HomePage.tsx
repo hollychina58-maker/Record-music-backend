@@ -78,7 +78,7 @@ export function HomePage() {
 
   useEffect(() => {
     apiService.clientGet('/admin/hero-image').then((d: any) => setHeroImage(d.data?.url || null)).catch(() => {});
-    apiService.clientGet('/story/tags').then((d: any) => setPopularTags(d.data || [])).catch(() => {});
+    apiService.clientGet('/tags').then((d: any) => setPopularTags(d.data || [])).catch(() => {});
   }, []);
 
   const fetchStories = (mine: boolean, tab?: 'discover' | 'following') => {

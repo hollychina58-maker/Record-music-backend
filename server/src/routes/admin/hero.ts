@@ -41,7 +41,7 @@ router.post('/hero-image/generate', authMiddleware, adminMiddleware, async (_req
 router.delete('/hero-image', authMiddleware, adminMiddleware, async (_req: AuthRequest, res: Response) => {
   const row = await dbGet<{ value: string }>("SELECT value FROM site_config WHERE key = 'hero_image'");
   if (row?.value) {
-    deleteFromR2(row.value).catch(() => {});
+    deleteFromR2(row.value).catch(err => console.error('[Hero] Delete old image failed:', err));
     await dbRun("DELETE FROM site_config WHERE key = 'hero_image'");
     await dbRun("DELETE FROM site_config WHERE key = 'hero_prompt'");
   }

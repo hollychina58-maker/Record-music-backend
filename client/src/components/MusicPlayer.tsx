@@ -177,7 +177,10 @@ export function MusicPlayer({ audioUrl, title, style: musicStyle, musicId, canDo
       setPlayError(false);
       // Route through audioManager for shared state (stops any other card's audio)
       if (musicId != null) {
-        useAudioManager.getState().play(musicId, audioUrl).then(() => initVisualizer(audio)).catch(() => {});
+        useAudioManager.getState().play(musicId, audioUrl).then(() => {
+          const actualAudio = useAudioManager.getState().getAudio();
+          if (actualAudio) initVisualizer(actualAudio);
+        }).catch(() => {});
       } else {
         if (audio.readyState === 0) audio.load();
         audioCtxRef.current?.resume();

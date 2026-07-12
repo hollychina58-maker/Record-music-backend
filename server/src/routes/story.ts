@@ -47,7 +47,6 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) 
            (SELECT COUNT(*) FROM comments WHERE story_id = s.id) as comment_count,
            (SELECT nickname FROM users WHERE id = s.user_id) as author_nickname,
            (SELECT id FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_id,
-           (SELECT id FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_id,
            (SELECT status FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_status,
            (SELECT music_type FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_type
     FROM stories s
@@ -73,7 +72,7 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response) 
 });
 
 // ── Tag aggregation ──
-router.get('/story/tags', async (_req: Request, res: Response) => {
+router.get('/tags', async (_req: Request, res: Response) => {
   // Tags stored as JSON arrays — use json_each to extract individual tags
   const rows = await dbAll<{ tag: string; count: number }>(
     `SELECT j.value as tag, COUNT(*) as count
@@ -85,7 +84,7 @@ router.get('/story/tags', async (_req: Request, res: Response) => {
 });
 
 // ── Search ──
-router.get('/story/search', async (req: Request, res: Response) => {
+router.get('/search', async (req: Request, res: Response) => {
   const q = (req.query.q as string || '').trim();
   if (q.length < 2) { res.json({ data: [], meta: { q, total: 0 } }); return; }
   const limit = Math.min(20, parseInt(String(req.query.limit || '10'), 10));
