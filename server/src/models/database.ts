@@ -312,6 +312,7 @@ export async function initDatabase(): Promise<void> {
   await client.execute('CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(from_user_id, to_user_id, created_at DESC)').catch(() => {});
   await client.execute('CREATE INDEX IF NOT EXISTS idx_stories_user_created ON stories(user_id, created_at DESC)').catch(() => {});
   await client.execute('CREATE INDEX IF NOT EXISTS idx_likes_target ON likes(target_type, target_id)').catch(() => {});
+  await client.execute('CREATE INDEX IF NOT EXISTS idx_orders_payment_id ON orders(payment_id)').catch(() => {});
   console.log('[DB] Database initialized');
 }
 

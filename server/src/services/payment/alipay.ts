@@ -1,7 +1,11 @@
 import { AlipaySdk } from 'alipay-sdk';
 import { PaymentProvider, CreatePaymentInput, PaymentResult, VerificationResult } from './types.js';
 
+let _client: AlipaySdk | null = null;
+
 function getClient(): AlipaySdk {
+  if (_client) return _client;
+
   const appId = process.env.ALIPAY_APP_ID;
   const privateKey = process.env.ALIPAY_PRIVATE_KEY;
   const alipayPublicKey = process.env.ALIPAY_PUBLIC_KEY;
@@ -12,7 +16,7 @@ function getClient(): AlipaySdk {
 
   const isSandbox = process.env.ALIPAY_SANDBOX === 'true';
 
-  return new AlipaySdk({
+  _client = new AlipaySdk({
     appId,
     privateKey: privateKey.replace(/\\n/g, '\n'),
     alipayPublicKey: alipayPublicKey.replace(/\\n/g, '\n'),
@@ -22,6 +26,7 @@ function getClient(): AlipaySdk {
     signType: 'RSA2',
     timeout: 15000,
   });
+  return _client;
 }
 
 export function createAlipayProvider(): PaymentProvider {

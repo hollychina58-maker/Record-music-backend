@@ -240,7 +240,8 @@ router.post('/orders/:id/pay', authMiddleware, async (req: AuthRequest, res: Res
       },
     });
   } catch (err: any) {
-    res.status(400).json({ error: err.message || '支付发起失败' });
+    console.error('[Payment] Pay error:', err.message);
+    res.status(400).json({ error: '支付发起失败，请稍后重试' });
   }
 });
 
@@ -414,7 +415,7 @@ router.post('/orders/:id/verify', authMiddleware, async (req: AuthRequest, res: 
     }
   } catch (err: any) {
     console.error('[Payment] Verify error:', err.message);
-    res.status(502).json({ error: err.message || '支付查询失败' });
+    res.status(502).json({ error: '支付查询失败，请稍后重试' });
   }
 });
 
