@@ -371,11 +371,14 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
       return { audioUrl: response.data.data.audio };
     } catch (err: any) {
       lastError = err;
-      // Only retry on transient errors (5xx, network, timeout, rate limit)
+      // Only retry on transient errors (network, timeout, 5xx, 429)
+      // Don't retry permanent errors (No audio URL, invalid API key, etc.)
       const status = err?.response?.status;
-      const isTransient = !status || status >= 500 || status === 429;
+      const code = err?.code;
+      const isTransient = !status && (code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ECONNREFUSED')
+        || status >= 500 || status === 429;
       if (!isTransient || attempt === MAX_RETRIES - 1) break;
-      const delay = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+      const delay = Math.pow(2, attempt) * 2000;
       console.warn(`[MiniMax] Attempt ${attempt + 1} failed, retrying in ${delay}ms:`, err.message);
       await new Promise(r => setTimeout(r, delay));
     }
