@@ -308,7 +308,7 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
     prompt,
     is_instrumental: isInstrumental,
     output_format: 'url',
-    stream: true, // MiniMax server-side acceleration (not SSE — response is still standard JSON)
+    // stream: true omitted — breaks audio URL response format on music-2.6
     audio_setting: {
       sample_rate: 44100,
       bitrate: 256000,
