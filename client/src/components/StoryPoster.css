@@ -27,7 +27,7 @@
 }
 
 .poster-char {
-  font-family: "Noto Serif SC", "Source Han Serif SC", serif;
+  font-family: var(--font-ink), serif;
   font-size: clamp(2rem, 8vw, 3rem);
   font-weight: 700;
   color: rgba(255, 255, 255, 0.85);
@@ -61,7 +61,7 @@
   justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
-  font-family: "Noto Serif SC", serif;
+  font-family: var(--font-ink), serif;
   font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.55);
   z-index: 2;

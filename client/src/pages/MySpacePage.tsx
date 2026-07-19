@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useLanguage } from '../i18n/LanguageContext';
 import { StoryPoster } from '../components/StoryPoster';
 import './MySpacePage.css';
+import '../components/Skeleton.css';
 
 interface Profile {
   id: number;

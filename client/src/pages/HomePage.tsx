@@ -7,6 +7,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { StoryPoster } from '../components/StoryPoster';
 import { useGeo } from '../hooks/useGeo';
 import './HomePage.css';
+import '../components/Skeleton.css';
 
 function StoryCardSkeleton({ index }: { index: number }) {
   return (
@@ -77,8 +78,8 @@ export function HomePage() {
   const [heroImage, setHeroImage] = useState<string | null>(null);
 
   useEffect(() => {
-    apiService.clientGet('/admin/hero-image').then((d: any) => setHeroImage(d.data?.url || null)).catch(() => {});
-    apiService.clientGet('/tags').then((d: any) => setPopularTags(d.data || [])).catch(() => {});
+    apiService.clientGet('/admin/hero-image').then((d: any) => setHeroImage(d.data?.url || null)).catch(err => console.error('[Home] Hero image fetch failed:', err));
+    apiService.clientGet('/tags').then((d: any) => setPopularTags(d.data || [])).catch(err => console.error('[Home] Tags fetch failed:', err));
   }, []);
 
   const fetchStories = (mine: boolean, tab?: 'discover' | 'following') => {
