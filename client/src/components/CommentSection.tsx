@@ -18,6 +18,8 @@ export function CommentSection({ storyId, isBurned, commentLikes = {} }: Comment
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
 
   const authorName = user?.nickname || t('comment.guest');
 
@@ -31,7 +33,7 @@ export function CommentSection({ storyId, isBurned, commentLikes = {} }: Comment
       const data = await apiService.getComments(storyId);
       setComments(data);
     } catch {
-      // silently fail
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -40,7 +42,7 @@ export function CommentSection({ storyId, isBurned, commentLikes = {} }: Comment
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
-
+    setSubmitError(false);
     setSubmitting(true);
     try {
       const { apiService } = await import('../services/api');
@@ -48,7 +50,7 @@ export function CommentSection({ storyId, isBurned, commentLikes = {} }: Comment
       setComments((prev) => [newComment, ...prev]);
       setContent('');
     } catch {
-      // silently fail
+      setSubmitError(true);
     } finally {
       setSubmitting(false);
     }
@@ -60,12 +62,16 @@ export function CommentSection({ storyId, isBurned, commentLikes = {} }: Comment
       await apiService.deleteComment(commentId);
       setComments((prev) => prev.filter((c) => c.id !== commentId));
     } catch {
-      // silently fail
+      // Removal from list is optimistic; show toast on failure is best
     }
   };
 
   if (loading) {
     return <div className="comment-section"><p className="cmt-loading">{t('comment.loading')}</p></div>;
+  }
+
+  if (loadError) {
+    return <div className="comment-section"><p className="cmt-empty">{t('common.error')}</p></div>;
   }
 
   return (
@@ -102,6 +108,7 @@ export function CommentSection({ storyId, isBurned, commentLikes = {} }: Comment
             >
               {submitting ? t('comment.submitting') : t('comment.submit')}
             </button>
+            {submitError && <p className="cmt-submit-error">{t('common.error')}</p>}
           </div>
         </form>
       )}

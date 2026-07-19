@@ -7,7 +7,7 @@
 
 .ink-input__label {
   font-size: var(--text-sm);
-  color: var(--ink-tertiary);
+  color: var(--ink-faint);
   font-weight: var(--font-weight-normal);
   letter-spacing: 0.05em;
 }
@@ -17,7 +17,7 @@
   padding: var(--space-2) 0;
   font-family: var(--font-ink);
   font-size: var(--text-base);
-  color: var(--ink-primary);
+  color: var(--ink-black);
   background: transparent;
   border: none;
   outline: none;
@@ -25,22 +25,22 @@
 }
 
 .ink-input__field::placeholder {
-  color: var(--gray-medium);
+  color: var(--ink-wash);
   font-style: italic;
 }
 
 .ink-input__field:focus {
-  color: var(--ink-secondary);
+  color: var(--ink-dark);
 }
 
 .ink-input__field--error {
-  color: var(--ember-red);
+  color: var(--seal-red);
 }
 
 /* Underline Style */
 .ink-input__underline {
   height: 1px;
-  background: var(--gray-light);
+  background: var(--ink-faint);
   position: relative;
   transition: background var(--transition-normal);
 }
@@ -52,7 +52,7 @@
   bottom: 0;
   width: 0;
   height: 2px;
-  background: var(--ink-primary);
+  background: var(--ink-black);
   transition: all var(--transition-normal);
   transform: translateX(-50%);
 }
@@ -62,12 +62,12 @@
 }
 
 .ink-input__underline--error {
-  background: var(--ember-red);
+  background: var(--seal-red);
 }
 
 /* Error Message */
 .ink-input__error {
   font-size: var(--text-xs);
-  color: var(--ember-red);
+  color: var(--seal-red);
   margin-top: var(--space-1);
 }
