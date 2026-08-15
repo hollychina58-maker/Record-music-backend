@@ -285,7 +285,23 @@ export async function activateOrder(order: OrderRow): Promise<boolean> {
     return false;
   }
 
+  let couponConsumed = false;
   try {
+    // 原子消耗优惠券（先于权益发放）：超限/失效则拒绝激活，防止超发。
+    // 之前该 UPDATE 放在 dbBatch 内却不检查影响行数，超限时权益照发、券却未消耗，
+    // 等于无限次兑现同一张券。
+    if (order.coupon_code) {
+      const couponRes = await dbRun(
+        "UPDATE coupons SET used_count = used_count + 1 WHERE code = ? AND is_active = 1 AND (max_uses IS NULL OR used_count < max_uses)",
+        [order.coupon_code]
+      );
+      if (couponRes.changes === 0) {
+        await dbRun("UPDATE orders SET status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [order.id]);
+        return false;
+      }
+      couponConsumed = true;
+    }
+
     const baseType = order.plan_type.replace(':upgrade', '');
     const product = await dbGet<ProductRow>(
       'SELECT * FROM products WHERE type = ? AND is_active = 1 LIMIT 1',
@@ -354,14 +370,6 @@ export async function activateOrder(order: OrderRow): Promise<boolean> {
       }
     }
 
-    // Consume coupon (safe: idempotent with max_uses guard)
-    if (order.coupon_code) {
-      stmts.push({
-        sql: 'UPDATE coupons SET used_count = used_count + 1 WHERE code = ? AND (max_uses IS NULL OR used_count < max_uses)',
-        args: [order.coupon_code],
-      });
-    }
-
     // Final status → completed (batch is atomic)
     stmts.push({
       sql: "UPDATE orders SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -376,6 +384,10 @@ export async function activateOrder(order: OrderRow): Promise<boolean> {
       "UPDATE orders SET status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
       [order.id]
     );
+    // 补偿已消耗的优惠券（权益发放 dbBatch 失败时），避免用户损失一次使用机会
+    if (couponConsumed && order.coupon_code) {
+      await dbRun('UPDATE coupons SET used_count = MAX(0, used_count - 1) WHERE code = ?', [order.coupon_code]);
+    }
     throw err;
   }
 }

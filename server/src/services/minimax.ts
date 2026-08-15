@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { assertSafeAudioUrl } from '../utils/urlSafety.js';
 
 interface MiniMaxMusicResponse {
   data?: {
@@ -317,22 +318,11 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
   };
 
   if (isCover && options.audioRefUrl) {
-    // Validate reference audio URL is accessible before sending to MiniMax
+    // SSRF guard：DNS 解析 + 私有地址拒绝 + 解括号（防 IPv6 字面量绕过）
+    await assertSafeAudioUrl(options.audioRefUrl);
+    // 探测可访问性；maxRedirects:0 防止 302 重定向到内网绕过上面的 IP 校验
     try {
-      // H4: SSRF guard — reject private/reserved hosts and non-http(s) schemes
-      const url = new URL(options.audioRefUrl);
-      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-        throw new Error('Only http(s) URLs are allowed');
-      }
-      const host = url.hostname.toLowerCase();
-      const isPrivate =
-        host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local') ||
-        /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|169\.254\.)/.test(host) ||
-        /^[0-9a-f:]+$/.test(host); // raw IPv6
-      if (isPrivate) {
-        throw new Error('Private / internal URLs are not allowed');
-      }
-      const head = await axios.head(options.audioRefUrl, { timeout: 10000 });
+      const head = await axios.head(options.audioRefUrl, { timeout: 10000, maxRedirects: 0 });
       const ct = String(head.headers['content-type'] || '');
       if (!ct.startsWith('audio/') && !ct.startsWith('application/octet-stream')) {
         throw new Error(`Invalid audio content-type: ${ct}`);

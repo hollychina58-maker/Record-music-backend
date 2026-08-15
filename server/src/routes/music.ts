@@ -11,6 +11,7 @@ import path from 'path';
 import fs from 'fs';
 
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { assertAllowedMediaHost } from '../utils/urlSafety.js';
 
 const router = Router();
 
@@ -293,6 +294,8 @@ router.get('/:id/stream', asyncHandler(async (req: Request, res: Response) => {
     if (burned) { res.status(403).json({ error: 'This story has been burned' }); return; }
 
     if (music.file_path.startsWith('http')) {
+      // 消费端 SSRF 白名单：file_path 只允许指向 R2/MiniMax OSS 域名，防止污染后成 SSRF 代理
+      assertAllowedMediaHost(music.file_path);
       // Stream directly — no HEAD probe (MiniMax signed URLs often reject HEAD)
       // No in-stream regeneration — if URL is dead, mark expired so UI shows regenerate button
       const range = req.headers.range;
@@ -303,6 +306,7 @@ router.get('/:id/stream', asyncHandler(async (req: Request, res: Response) => {
         const upstream = await axios.get<NodeJS.ReadableStream>(music.file_path, {
           responseType: 'stream',
           timeout: 30000,
+          maxRedirects: 0, // 与白名单校验成对：禁止 302 跳转到白名单外（防 SSRF 代理）
           headers: {
             ...(range ? { Range: range } : {}),
             ...(miniMaxKey ? { Authorization: `Bearer ${miniMaxKey}` } : {}),
@@ -367,12 +371,15 @@ router.get('/:id/download', authMiddleware, asyncHandler(async (req: AuthRequest
   if (music.story_user_id !== req.userId) { res.status(403).json({ error: 'Only the author can download this music' }); return; }
 
   if (music.file_path.startsWith('http')) {
+    // 消费端 SSRF 白名单：仅允许 R2/MiniMax OSS 域名
+    assertAllowedMediaHost(music.file_path);
     // 3-19: proxy the file through the authenticated endpoint instead of 302 to a
     // public permanent URL (a 302 would hand out a shareable link bypassing auth)
     try {
       const upstream = await axios.get<NodeJS.ReadableStream>(music.file_path, {
         responseType: 'stream',
         timeout: 30000,
+        maxRedirects: 0, // 与白名单校验成对：禁止 302 跳转到白名单外（防 SSRF 代理）
       });
       res.setHeader('Content-Type', String(upstream.headers['content-type'] || 'audio/mpeg'));
       res.setHeader('Content-Disposition', `attachment; filename="music_${music.id}.mp3"`);

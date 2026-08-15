@@ -63,6 +63,21 @@ router.put('/orders/:id/status', authMiddleware, adminMiddleware, asyncHandler(a
   const order = await dbGet<any>('SELECT * FROM orders WHERE id = ?', [id]);
   if (!order) { res.status(404).json({ error: 'Order not found' }); return; }
 
+  // 状态机白名单：禁止非法转换——
+  //   completed→pending 会再次 activateOrder 重复发权益；
+  //   completed→cancelled 不撤销已发权益；
+  //   refunded→completed 会绕过退款撤销逻辑反复套现。
+  const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+    pending: ['completed', 'cancelled'],
+    completed: ['refunded'],
+    cancelled: [],
+    refunded: [],
+  };
+  if (!ALLOWED_TRANSITIONS[order.status]?.includes(status)) {
+    res.status(400).json({ error: `Illegal status transition: ${order.status} → ${status}` });
+    return;
+  }
+
   // 3-2: manual 'completed' must actually grant the entitlement (subscription/credits),
   // exactly like the payment-activation path — otherwise the user pays but gets nothing.
   if (status === 'completed' && order.status !== 'completed') {

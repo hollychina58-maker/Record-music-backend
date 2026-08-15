@@ -14,7 +14,16 @@ export function getCookie(req: Request, name: string): string | null {
     const eq = part.indexOf('=');
     if (eq === -1) continue;
     const key = part.slice(0, eq).trim();
-    if (key === name) return decodeURIComponent(part.slice(eq + 1).trim());
+    if (key === name) {
+      try {
+        return decodeURIComponent(part.slice(eq + 1).trim());
+      } catch {
+        // 畸形百分号编码（如 %E0%A4%A）会让 decodeURIComponent 抛 URIError；
+        // 若任其抛出，Express 4 同步调用 async 中间件时会变成 unhandledRejection，
+        // 请求既不 next() 也不响应 → 连接永久挂起（未认证 DoS）。失败即按无 token 处理。
+        return null;
+      }
+    }
   }
   return null;
 }

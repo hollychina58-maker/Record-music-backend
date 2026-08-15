@@ -41,6 +41,7 @@ export async function uploadToR2(
       const response = await axios.get(sourceUrl, {
         responseType: 'arraybuffer',
         timeout: 180000, // 3min — 跨海下载国内 OSS 音频(9MB+)可能较慢，60s 太短会误判 R2 失败
+        maxRedirects: 0, // 禁止重定向，防止 sourceUrl 被劫持后 302 到内网（SSRF）
         headers: miniMaxKey ? { Authorization: `Bearer ${miniMaxKey}` } : undefined,
       });
 
