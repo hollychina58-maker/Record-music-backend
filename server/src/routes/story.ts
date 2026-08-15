@@ -1,0 +1,308 @@
+import { Router, Request, Response } from 'express';
+import { dbGet, dbAll, dbRun, dbBatch } from '../models/database.js';
+import { authMiddleware, optionalAuthMiddleware, AuthRequest } from '../middleware/auth.js';
+import { detectLanguage } from '../services/language.js';
+import { lookupGeo } from '../services/geoip.js';
+import { generateCoverImage, buildCoverPrompt } from '../services/minimax.js';
+import { uploadToR2, deleteFromR2 } from '../services/r2.js';
+import { analyzeStory } from '../services/storyAnalysis.js';
+
+import { asyncHandler } from '../utils/asyncHandler.js';
+
+const router = Router();
+
+function parseTags(raw: string | null): string[] | null {
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
+router.get('/', optionalAuthMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const countryCode = req.query.countryCode as string | undefined;
+  const onlyMine = req.query.onlyMine === 'true';
+  const tag = req.query.tag as string | undefined;
+  const tab = req.query.tab as string | undefined;  // 'following' = stories from followed authors
+  // H5: NaN-safe pagination parsing
+  const page = Number.isFinite(parseInt(String(req.query.page || ''), 10)) ? Math.max(1, parseInt(String(req.query.page), 10)) : 1;
+  const rawLimit = Number.isFinite(parseInt(String(req.query.limit || ''), 10)) ? parseInt(String(req.query.limit), 10) : 20;
+  const limit = Math.min(50, Math.max(1, rawLimit));
+  const offset = (page - 1) * limit;
+
+  const conditions: string[] = ['bs.story_id IS NULL'];
+  const params: unknown[] = [];
+
+  if (tag) {
+    // 3-10: exact tag match via json_each — avoids substring false positives ("sports" vs "esports")
+    conditions.push("EXISTS (SELECT 1 FROM json_each(s.tags) WHERE json_each.value = ?)");
+    params.push(tag);
+  } else if (onlyMine && req.userId) {
+    conditions.push('s.user_id = ?');
+    params.push(req.userId);
+  } else if (tab === 'following' && req.userId) {
+    conditions.push('s.user_id IN (SELECT followed_id FROM follows WHERE follower_id = ?)');
+    params.push(req.userId);
+  }
+  // Note: countryCode filtering removed — on a small platform it hides too many stories.
+  // Revisit when there are 1000+ stories per region.
+
+  const where = conditions.join(' AND ');
+
+  // Use subqueries instead of JOINs + GROUP BY — avoids Turso/libsql row-dropping issues
+  const storyQuery = `
+    SELECT s.*,
+           (SELECT COUNT(*) FROM comments WHERE story_id = s.id) as comment_count,
+           (SELECT nickname FROM users WHERE id = s.user_id) as author_nickname,
+           (SELECT m.id || '|' || m.status || '|' || COALESCE(m.music_type, '')
+            FROM music m WHERE m.story_id = s.id ORDER BY m.created_at DESC LIMIT 1) as music_info
+    FROM stories s
+    LEFT JOIN burned_stories bs ON s.id = bs.story_id
+    WHERE ${where}
+    ORDER BY s.like_count DESC, s.created_at DESC
+    LIMIT ? OFFSET ?`;
+
+  const stories = await dbAll<any>(storyQuery, [...params, limit, offset]);
+
+  // Total count for pagination UI
+  const countResult = await dbGet<{ cnt: number }>(
+    `SELECT COUNT(*) as cnt FROM stories s LEFT JOIN burned_stories bs ON s.id = bs.story_id WHERE ${where}`,
+    params
+  );
+  const total = countResult?.cnt ?? 0;
+
+  const parsed = stories.map((s: any) => {
+    // 3-9: expand merged music_info (id|status|type)
+    let music_id: number | null = null;
+    let music_status: string | null = null;
+    let music_type: string | null = null;
+    if (s.music_info) {
+      const parts = String(s.music_info).split('|');
+      music_id = parts[0] ? Number(parts[0]) : null;
+      music_status = parts[1] || null;
+      music_type = parts[2] || null;
+    }
+    const { music_info, ...rest } = s;
+    return { ...rest, music_id, music_status, music_type, tags: parseTags(s.tags) };
+  });
+  res.json({ data: parsed, meta: { page, limit, total } });
+}));
+
+// ── Tag aggregation ──
+router.get('/tags', asyncHandler(async (_req: Request, res: Response) => {
+  // Tags stored as JSON arrays — use json_each to extract individual tags
+  const rows = await dbAll<{ tag: string; count: number }>(
+    `SELECT j.value as tag, COUNT(*) as count
+     FROM stories s, json_each(s.tags) j
+     WHERE s.tags IS NOT NULL AND s.tags != '[]'
+     GROUP BY j.value ORDER BY count DESC LIMIT 15`
+  );
+  res.json({ data: rows });
+}));
+
+// ── Search ──
+router.get('/search', asyncHandler(async (req: Request, res: Response) => {
+  const q = (req.query.q as string || '').trim();
+  if (q.length < 2) { res.json({ data: [], meta: { q, total: 0 } }); return; }
+  const rawLimit = Number.isFinite(parseInt(String(req.query.limit || ''), 10)) ? parseInt(String(req.query.limit), 10) : 10;
+  const limit = Math.min(20, Math.max(1, rawLimit));
+  const page = Number.isFinite(parseInt(String(req.query.page || ''), 10)) ? Math.max(1, parseInt(String(req.query.page), 10)) : 1;
+  const offset = (page - 1) * limit;
+
+  const like = `%${q}%`;
+  const stories = await dbAll<any>(
+    `SELECT s.*, u.nickname as author_nickname,
+            (SELECT COUNT(*) FROM comments WHERE story_id = s.id) as comment_count,
+            (SELECT status FROM music WHERE story_id = s.id ORDER BY created_at DESC LIMIT 1) as music_status
+     FROM stories s
+     LEFT JOIN users u ON s.user_id = u.id
+     LEFT JOIN burned_stories bs ON s.id = bs.story_id
+     WHERE bs.story_id IS NULL AND (s.title LIKE ? OR s.content LIKE ?)
+     ORDER BY s.created_at DESC LIMIT ? OFFSET ?`,
+    [like, like, limit, offset]
+  );
+  const totalRow = await dbGet<{ cnt: number }>(
+    `SELECT COUNT(*) as cnt FROM stories s LEFT JOIN burned_stories bs ON s.id = bs.story_id
+     WHERE bs.story_id IS NULL AND (s.title LIKE ? OR s.content LIKE ?)`, [like, like]
+  );
+  res.json({ data: stories.map((s: any) => ({ ...s, tags: parseTags(s.tags) })), meta: { q, page, limit, total: totalRow?.cnt ?? 0 } });
+}));
+
+router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
+  const story = await dbGet<any>(
+    `SELECT s.*, u.nickname as author_nickname,
+            CASE WHEN bs.story_id IS NOT NULL THEN 1 ELSE 0 END as isBurned
+     FROM stories s
+     LEFT JOIN users u ON s.user_id = u.id
+     LEFT JOIN burned_stories bs ON s.id = bs.story_id
+     WHERE s.id = ?`,
+    [req.params.id]
+  );
+  if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+  res.json({ data: { ...story, tags: parseTags(story.tags), isBurned: !!story.isBurned } });
+}));
+
+router.post('/', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  try {
+    const { title, content, metadata } = req.body;
+    if (!title || !content) { res.status(400).json({ error: 'title and content are required' }); return; }
+    // 3-6: length limits — prevent storage bloat and UI breakage
+    if (typeof title !== 'string' || title.length > 200) {
+      res.status(400).json({ error: '标题不能超过 200 个字符' }); return;
+    }
+    if (typeof content !== 'string' || content.length > 50000) {
+      res.status(400).json({ error: '正文不能超过 50000 个字符' }); return;
+    }
+
+    const language = detectLanguage(content);
+    const ip = (req.headers['x-forwarded-for'] as string || req.ip || '127.0.0.1').split(',')[0].trim();
+    const countryCode = lookupGeo(ip).countryCode || null;
+
+    const result = await dbRun(
+      'INSERT INTO stories (user_id, title, content, metadata, language, country_code) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.userId || null, title, content, metadata || null, language, countryCode]
+    );
+    const storyId = result.lastInsertRowid;
+
+    // AI story analysis: extract tone and tags (runs synchronously so response includes them)
+    const { tone, tags } = await analyzeStory(content).catch(() => ({ tone: null as string | null, tags: [] as string[] }));
+    if (tone || tags.length > 0) {
+      await dbRun('UPDATE stories SET tone = ?, tags = ? WHERE id = ?', [tone, JSON.stringify(tags), storyId]);
+    }
+
+    res.status(201).json({
+      data: { id: storyId, userId: req.userId || null, title, content, metadata, tone, tags },
+    });
+
+    // Async: create notifications for followers
+    const authorId = req.userId;
+    if (authorId) {
+      setImmediate(async () => {
+        try {
+          const followers = await dbAll<{ follower_id: number }>(
+            'SELECT follower_id FROM follows WHERE followed_id = ?', [authorId]
+          );
+          if (followers.length === 0) return;
+          const BATCH = 200;
+          for (let i = 0; i < followers.length; i += BATCH) {
+            const batch = followers.slice(i, i + BATCH).map(f => ({
+              sql: 'INSERT OR IGNORE INTO notifications (user_id, type, source_id, actor_id) VALUES (?, ?, ?, ?)',
+              args: [f.follower_id, 'new_story', storyId, authorId],
+            }));
+            await dbBatch(batch);
+          }
+          console.log(`[Story] Created ${followers.length} notifications for story ${storyId}`);
+        } catch (e) {
+          console.error('[Story] Failed to create notifications:', e);
+        }
+      });
+    }
+  } catch (err) {
+    console.error('[Story] Create error:', err);
+    res.status(500).json({ error: 'Failed to create story' });
+  }
+}));
+
+router.put('/:id', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { title, content, metadata } = req.body;
+  if (!title || !content) { res.status(400).json({ error: 'title and content are required' }); return; }
+  if (typeof title !== 'string' || title.length > 200) {
+    res.status(400).json({ error: '标题不能超过 200 个字符' }); return;
+  }
+  if (typeof content !== 'string' || content.length > 50000) {
+    res.status(400).json({ error: '正文不能超过 50000 个字符' }); return;
+  }
+
+  const story = await dbGet<{ user_id: number | null }>('SELECT user_id FROM stories WHERE id = ?', [req.params.id]);
+  if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+  if (story.user_id !== req.userId) { res.status(403).json({ error: 'Not authorized' }); return; }
+  // 3-21: burned stories are immutable memorials — block editing
+  const burned = await dbGet('SELECT id FROM burned_stories WHERE story_id = ?', [req.params.id]);
+  if (burned) { res.status(403).json({ error: 'This story has been burned and cannot be edited' }); return; }
+
+  await dbRun('UPDATE stories SET title = ?, content = ?, metadata = ? WHERE id = ?',
+    [title, content, metadata || null, req.params.id]);
+  res.json({ data: { id: req.params.id, title, content, metadata } });
+}));
+
+router.delete('/:id', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const story = await dbGet<{ user_id: number | null }>('SELECT user_id FROM stories WHERE id = ?', [req.params.id]);
+  if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+  if (story.user_id !== req.userId) { res.status(403).json({ error: 'Not authorized' }); return; }
+
+  // Cascade cleanup — match admin/stories.ts pattern + R2 cleanup
+  const id = parseInt(req.params.id, 10);
+
+  // Delete R2 files before DB records (need file_path from music/cover before deletion)
+  const musicFiles = await dbAll<{ file_path: string }>(
+    'SELECT file_path FROM music WHERE story_id = ? AND file_path IS NOT NULL', [id]
+  );
+  for (const m of musicFiles) {
+    deleteFromR2(m.file_path).catch(err => console.error('[Story Delete] R2 music delete failed:', err));
+  }
+  const storyRow = await dbGet<{ cover_image: string | null }>(
+    'SELECT cover_image FROM stories WHERE id = ?', [id]
+  );
+  if (storyRow?.cover_image) {
+    deleteFromR2(storyRow.cover_image).catch(err => console.error('[Story Delete] R2 cover delete failed:', err));
+  }
+
+  // DB cascade
+  // 3-14: drop notifications whose source_id points at this story (dead links)
+  await dbRun("DELETE FROM notifications WHERE type IN ('new_story','comment_story','like_story') AND source_id = ?", [id]);
+  await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id IN (SELECT id FROM comments WHERE story_id = ?)', ['comment', id]);
+  await dbRun('DELETE FROM comments WHERE story_id = ?', [id]);
+  await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id = ?', ['story', id]);
+  await dbRun('DELETE FROM music_usage WHERE story_id = ?', [id]);
+  await dbRun('DELETE FROM music WHERE story_id = ?', [id]);
+  await dbRun('DELETE FROM burned_stories WHERE story_id = ?', [id]);
+  await dbRun('DELETE FROM stories WHERE id = ?', [id]);
+  res.json({ message: 'Story deleted successfully' });
+}));
+
+// Async cover image generation helper
+async function processCoverAsync(storyId: number, text: string, tone: string | null, tags: string[] | null) {
+  try {
+    const prompt = buildCoverPrompt(tone, tags, text);
+    await dbRun('UPDATE stories SET cover_prompt = ? WHERE id = ?', [prompt, storyId]);
+
+    const result = await generateCoverImage(prompt);
+    // Upload to R2 for permanent storage (MiniMax image URL expires)
+    const bucketKey = `covers/${storyId}_${Date.now()}.png`;
+    const permanentUrl = await uploadToR2(result.imageUrl, bucketKey, 'image/png');
+    await dbRun('UPDATE stories SET cover_image = ? WHERE id = ?', [permanentUrl, storyId]);
+    console.log('[Cover] Image generated for story', storyId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown';
+    console.error('[Cover] Generation failed for story', storyId, ':', message);
+    // Set prompt as null on failure so user can retry
+    await dbRun('UPDATE stories SET cover_prompt = NULL WHERE id = ?', [storyId]);
+  }
+}
+
+// Generate cover image for a story (async)
+router.post('/:id/generate-cover', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const story = await dbGet<{ id: number; user_id: number | null; content: string; tone: string | null; tags: string | null }>(
+    'SELECT id, user_id, content, tone, tags FROM stories WHERE id = ?', [req.params.id]
+  );
+  if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+  if (story.user_id !== req.userId) { res.status(403).json({ error: 'Not authorized' }); return; }
+
+  const tags: string[] | null = story.tags ? (() => { try { return JSON.parse(story.tags); } catch { return null; } })() : null;
+
+  // Fire-and-forget async generation
+  processCoverAsync(story.id, story.content, story.tone, tags);
+
+  res.status(202).json({ data: { coverStatus: 'pending' } });
+}));
+
+// Delete cover image (author only)
+router.delete('/:id/cover', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const story = await dbGet<{ user_id: number | null }>(
+    'SELECT user_id FROM stories WHERE id = ?', [req.params.id]
+  );
+  if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+  if (story.user_id !== req.userId) { res.status(403).json({ error: 'Not authorized' }); return; }
+
+  await dbRun('UPDATE stories SET cover_image = NULL, cover_prompt = NULL WHERE id = ?', [req.params.id]);
+  res.json({ message: 'Cover image deleted' });
+}));
+
+export default router;

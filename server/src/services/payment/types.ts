@@ -1,0 +1,25 @@
+export interface CreatePaymentInput {
+  orderId: number;
+  amountCents: number;
+  currency: string;
+  description: string;
+}
+
+export interface PaymentResult {
+  providerOrderId: string;
+  redirectUrl?: string;
+  qrCode?: string;
+}
+
+export interface VerificationResult {
+  verified: boolean;
+  providerOrderId: string;
+  status: string;
+  notFound?: boolean;
+}
+
+export interface PaymentProvider {
+  name: string;
+  createPayment(input: CreatePaymentInput): Promise<PaymentResult>;
+  verifyPayment(providerOrderId: string): Promise<VerificationResult>;
+}
