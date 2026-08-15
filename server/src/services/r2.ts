@@ -40,7 +40,7 @@ export async function uploadToR2(
       const miniMaxKey = process.env.MINIMAX_API_KEY;
       const response = await axios.get(sourceUrl, {
         responseType: 'arraybuffer',
-        timeout: 60000,
+        timeout: 180000, // 3min — 跨海下载国内 OSS 音频(9MB+)可能较慢，60s 太短会误判 R2 失败
         headers: miniMaxKey ? { Authorization: `Bearer ${miniMaxKey}` } : undefined,
       });
 

@@ -257,6 +257,7 @@ export const MOOD_LABELS: Record<string, string> = {
 };
 
 export async function generateMusic(text: string, options: MusicOptions = {}): Promise<{ audioUrl: string }> {
+  const startedAt = Date.now();
   const apiKey = process.env.MINIMAX_API_KEY;
 
   if (!apiKey) {
@@ -363,7 +364,7 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
   // Timeout: cover model needs more time (reference audio processing)
   // 2. 超时足够长：MiniMax 是同步长请求，冷启动可达 5-8 分钟。一次请求必须等到
   // 它生成完；若中途超时，服务端其实还在生成，重试只会再发起一个重复任务。
-  const timeout = isCover ? 540000 : (durationSec <= 30 ? 300000 : (durationSec <= 60 ? 480000 : 540000));
+  const timeout = isCover ? 600000 : (durationSec <= 30 ? 360000 : (durationSec <= 60 ? 600000 : 720000));
   const url = `${process.env.MINIMAX_API_URL || 'https://api.minimaxi.com/v1'}/music_generation`;
 
   // Exponential backoff retry (3 attempts) for transient MiniMax failures
@@ -380,8 +381,9 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
         throw new Error('MiniMax API error (code ' + response.data.base_resp.status_code + '): ' + (response.data.base_resp.status_msg || 'unknown'));
       }
       if (!response.data.data?.audio) {
-        throw new Error('No audio URL in response (base_resp status ' + (response.data.base_resp?.status_code ?? 'unknown') + ')');
+        throw new Error('No audio URL in response (base_resp status ' + (response.data.base_resp?.status_code ?? 'unknown') + ', data.status ' + (response.data.data?.status ?? 'unknown') + ')');
       }
+      console.log(`[MiniMax] Generated audio in ${((Date.now() - startedAt) / 1000).toFixed(1)}s (status ${response.data.data.status})`);
       return { audioUrl: response.data.data.audio };
     } catch (err: any) {
       lastError = err;
@@ -401,6 +403,8 @@ export async function generateMusic(text: string, options: MusicOptions = {}): P
       await new Promise(r => setTimeout(r, delay));
     }
   }
+  const detail = lastError ? `${lastError.message}${(lastError as any)?.code ? ` (code ${(lastError as any).code})` : ''}` : 'unknown';
+  console.error(`[MiniMax] generateMusic FAILED after ${((Date.now() - startedAt) / 1000).toFixed(1)}s: ${detail}`);
   throw lastError || new Error('MiniMax API failed after retries');
 }
 

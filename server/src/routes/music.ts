@@ -51,8 +51,9 @@ async function processMusicAsync(
   isSubscription: boolean,
   subscriptionId: number | null,
 ) {
+  const startedAt = Date.now();
   try {
-    console.log(`[Music] Starting async generation musicId=${musicId} storyId=${storyId} type=${musicOptions.musicType || 'instrumental'}`);
+    console.log(`[Music] Starting async generation musicId=${musicId} storyId=${storyId} type=${musicOptions.musicType || 'instrumental'} duration=${musicOptions.duration || 'medium'}`);
     const result = await generateMusic(text, musicOptions);
     console.log(`[Music] MiniMax generated audio: ${result.audioUrl.slice(0, 80)}...`);
     // Upload to Cloudflare R2 for permanent CDN storage (MiniMax URL expires in ~24h)
@@ -65,7 +66,8 @@ async function processMusicAsync(
     ]);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown';
-    console.error('[Music] Async generation failed for musicId', musicId, 'storyId', storyId, ':', message);
+    const code = (err as any)?.code || '';
+    console.error(`[Music] Async generation failed for musicId=${musicId} storyId=${storyId} after ${((Date.now() - startedAt) / 1000).toFixed(1)}s (code=${code}): ${message}`);
     if (err instanceof Error && err.stack) console.error('[Music] Stack:', err.stack.split('\n').slice(0, 3).join('\n'));
     await dbRun("UPDATE music SET status = 'failed' WHERE id = ?", [musicId]);
     if (isSubscription && subscriptionId) {
