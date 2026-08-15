@@ -26,7 +26,7 @@ type ProviderName = typeof ALLOWED_PROVIDERS[number];
 
 // 定价基准：1 美金 = 100 分（products.price_cents 现为美金分）。
 // 支付宝按人民币结算，入单/支付时按此汇率把美金分折算成人民币分。
-const USD_TO_CNY_RATE = 7.2; // 1 USD ≈ 7.2 CNY（可按需调整）
+const USD_TO_CNY_RATE = 6; // 1 USD ≈ 6 CNY（用户指定，可按需调整）
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface ProductRow {

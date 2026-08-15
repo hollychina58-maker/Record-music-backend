@@ -323,11 +323,11 @@ export async function initDatabase(): Promise<void> {
   }
 
   // 一次性迁移：定价基准从人民币改为美金后，存量优惠券的固定减免金额
-  // discount_cents 原为人民币分，折算成美金分（÷7.2）以保持购买力等价。
+  // discount_cents 原为人民币分，折算成美金分（÷6）以保持购买力等价。
   // 用 site_config 标记避免重复迁移（products.price_cents 数字不变、语义改美金分，故不迁移）。
   const migrated = await client.execute("SELECT 1 FROM site_config WHERE key = 'coupon_cents_to_usd_migrated'");
   if (migrated.rows.length === 0) {
-    await client.execute('UPDATE coupons SET discount_cents = ROUND(discount_cents / 7.2) WHERE discount_cents IS NOT NULL');
+    await client.execute('UPDATE coupons SET discount_cents = ROUND(discount_cents / 6) WHERE discount_cents IS NOT NULL');
     await client.execute("INSERT INTO site_config (key, value) VALUES ('coupon_cents_to_usd_migrated', '1')");
     console.log('[DB] Migrated coupon discount_cents from CNY cents to USD cents');
   }
