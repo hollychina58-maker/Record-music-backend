@@ -90,6 +90,8 @@ router.get('/subscription', authMiddleware, asyncHandler(async (req: AuthRequest
 
 // ─── POST /orders ────────────────────────────────────────────────────────────
 router.post('/orders', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  let appliedCouponCode: string | null = null;
+  let couponClaimed = false;
   try {
     const { productId, provider, quantity = 1, couponCode } = req.body;
     const userId = req.userId!;
@@ -163,25 +165,30 @@ router.post('/orders', authMiddleware, asyncHandler(async (req: AuthRequest, res
       }
     }
 
-    // 5. Apply coupon (validate strictly — reject invalid codes explicitly)
-    let appliedCouponCode: string | null = null;
+    // 5. Apply coupon — 原子占用名额（防并发绕过 max_uses）。
+    // 之前只 SELECT 校验、真正记账在激活时，两个订单可同时通过校验拿到折扣，
+    // 激活时第二个超限导致「付了折扣价却拿不到权益」。改为下单即原子 claim。
     if (couponCode && couponCode.trim()) {
-      const coupon = await dbGet<any>(
-        `SELECT * FROM coupons
-         WHERE code = ? AND is_active = 1
-           AND (max_uses IS NULL OR used_count < max_uses)
-           AND (valid_from IS NULL OR valid_from <= datetime('now'))
-           AND (valid_until IS NULL OR valid_until >= datetime('now'))`,
-        [couponCode.trim()]
+      const code = couponCode.trim();
+      const claim = await dbRun(
+        "UPDATE coupons SET used_count = used_count + 1 WHERE code = ? AND is_active = 1 AND (max_uses IS NULL OR used_count < max_uses) AND (valid_from IS NULL OR valid_from <= datetime('now')) AND (valid_until IS NULL OR valid_until >= datetime('now'))",
+        [code]
       );
+      if (claim.changes === 0) {
+        res.status(400).json({ error: '优惠码无效或已过期' });
+        return;
+      }
+      couponClaimed = true;
+      const coupon = await dbGet<any>('SELECT * FROM coupons WHERE code = ?', [code]);
       if (!coupon) {
+        await dbRun('UPDATE coupons SET used_count = MAX(0, used_count - 1) WHERE code = ?', [code]);
         res.status(400).json({ error: '优惠码无效或已过期' });
         return;
       }
       const discountPercent = Math.min(99, Math.max(0, coupon.discount_percent || 0));
       if (discountPercent > 0) totalCents = Math.round(totalCents * (100 - discountPercent) / 100);
       if (coupon.discount_cents > 0) totalCents = Math.max(0, totalCents - coupon.discount_cents);
-      appliedCouponCode = coupon.code;
+      appliedCouponCode = code;
     }
 
     const planType = isUpgrade ? `${product.type}:upgrade` : product.type;
@@ -197,7 +204,7 @@ router.post('/orders', authMiddleware, asyncHandler(async (req: AuthRequest, res
         totalCents,
         provider,
         appliedCouponCode,
-        JSON.stringify({ quantity: purchasedQty }),
+        JSON.stringify({ quantity: purchasedQty, productId: product.id, musicLimit: product.music_limit ?? null }),
       ]
     );
 
@@ -211,6 +218,10 @@ router.post('/orders', authMiddleware, asyncHandler(async (req: AuthRequest, res
       },
     });
   } catch (err: any) {
+    // 订单创建失败时释放已占用的优惠券名额（避免名额被僵尸占用）
+    if (couponClaimed && appliedCouponCode) {
+      await dbRun('UPDATE coupons SET used_count = MAX(0, used_count - 1) WHERE code = ?', [appliedCouponCode]).catch(() => {});
+    }
     console.error('[Payment] Create order error:', err.message);
     res.status(500).json({ error: '创建订单失败，请稍后重试' });
   }
@@ -285,22 +296,9 @@ export async function activateOrder(order: OrderRow): Promise<boolean> {
     return false;
   }
 
-  let couponConsumed = false;
   try {
-    // 原子消耗优惠券（先于权益发放）：超限/失效则拒绝激活，防止超发。
-    // 之前该 UPDATE 放在 dbBatch 内却不检查影响行数，超限时权益照发、券却未消耗，
-    // 等于无限次兑现同一张券。
-    if (order.coupon_code) {
-      const couponRes = await dbRun(
-        "UPDATE coupons SET used_count = used_count + 1 WHERE code = ? AND is_active = 1 AND (max_uses IS NULL OR used_count < max_uses)",
-        [order.coupon_code]
-      );
-      if (couponRes.changes === 0) {
-        await dbRun("UPDATE orders SET status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [order.id]);
-        return false;
-      }
-      couponConsumed = true;
-    }
+    // 优惠券名额已在创建订单时原子占用（POST /orders），这里不再重复消耗，
+    // 避免「创建时占用 + 激活时再占用」导致 used_count 被记两次。
 
     const baseType = order.plan_type.replace(':upgrade', '');
     const product = await dbGet<ProductRow>(
@@ -384,10 +382,6 @@ export async function activateOrder(order: OrderRow): Promise<boolean> {
       "UPDATE orders SET status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
       [order.id]
     );
-    // 补偿已消耗的优惠券（权益发放 dbBatch 失败时），避免用户损失一次使用机会
-    if (couponConsumed && order.coupon_code) {
-      await dbRun('UPDATE coupons SET used_count = MAX(0, used_count - 1) WHERE code = ?', [order.coupon_code]);
-    }
     throw err;
   }
 }

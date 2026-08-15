@@ -91,17 +91,37 @@ router.put('/orders/:id/status', authMiddleware, adminMiddleware, asyncHandler(a
     return;
   }
 
+  // 'cancelled'：释放创建订单时占用的优惠券名额（失败不阻断状态更新）
+  if (status === 'cancelled' && order.status === 'pending' && order.coupon_code) {
+    await dbRun('UPDATE coupons SET used_count = MAX(0, used_count - 1) WHERE code = ?', [order.coupon_code]).catch(() => {});
+  }
+
   // 'refunded': revoke previously granted entitlements (best-effort, admin tool)
   if (status === 'refunded' && order.status === 'completed') {
     const baseType = String(order.plan_type || '').replace(':upgrade', '');
+    const meta = (() => { try { return JSON.parse(order.metadata || '{}'); } catch { return {}; } })();
     if (baseType === 'per_use') {
-      const meta = (() => { try { return JSON.parse(order.metadata || '{}'); } catch { return {}; } })();
       const qty = Math.max(1, parseInt(String(meta.quantity ?? 1), 10));
-      const product = await dbGet<{ music_limit: number | null }>('SELECT music_limit FROM products WHERE type = ? AND is_active = 1 LIMIT 1', [baseType]);
-      const credits = (product?.music_limit || 1) * qty;
+      // 用订单创建时的 music_limit 快照，而非退款时点的产品（产品改价/改额度后积分不一致）
+      const musicLimit = Number(meta.musicLimit ?? 1) || 1;
+      const credits = musicLimit * qty;
       await dbRun('UPDATE users SET free_music_count = MAX(0, free_music_count - ?) WHERE id = ?', [credits, order.user_id]);
     } else if (baseType) {
-      await dbRun("UPDATE subscriptions SET status = 'cancelled' WHERE user_id = ? AND status = 'active'", [order.user_id]);
+      // 只取消「该订单对应的」订阅：若用户之后已升级，按 user_id 取消会误伤新订阅。
+      // 优先按快照 productId 定位；无快照时退化为按当前 active 订阅（旧订单兼容）。
+      if (meta.productId) {
+        const revoked = await dbRun(
+          "UPDATE subscriptions SET status = 'cancelled' WHERE user_id = ? AND product_id = ? AND status = 'active'",
+          [order.user_id, meta.productId]
+        );
+        if (revoked.changes === 0) {
+          // subscriptions.user_id UNIQUE：月付→年付升级是同 row 更新，旧月付订单退款时
+          // productId 已匹配不到（row 已变 yearly）。此时仅退钱、不退已覆盖的权益（保留当前订阅）。
+          console.warn(`[Admin] Refund order ${id}: subscription product ${meta.productId} already replaced — refunding money only, keeping current subscription`);
+        }
+      } else {
+        await dbRun("UPDATE subscriptions SET status = 'cancelled' WHERE user_id = ? AND status = 'active'", [order.user_id]);
+      }
     }
   }
 
