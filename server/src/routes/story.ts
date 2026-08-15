@@ -244,16 +244,17 @@ router.delete('/:id', authMiddleware, asyncHandler(async (req: AuthRequest, res:
     deleteFromR2(storyRow.cover_image).catch(err => console.error('[Story Delete] R2 cover delete failed:', err));
   }
 
-  // DB cascade
-  // 3-14: drop notifications whose source_id points at this story (dead links)
-  await dbRun("DELETE FROM notifications WHERE type IN ('new_story','comment_story','like_story') AND source_id = ?", [id]);
-  await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id IN (SELECT id FROM comments WHERE story_id = ?)', ['comment', id]);
-  await dbRun('DELETE FROM comments WHERE story_id = ?', [id]);
-  await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id = ?', ['story', id]);
-  await dbRun('DELETE FROM music_usage WHERE story_id = ?', [id]);
-  await dbRun('DELETE FROM music WHERE story_id = ?', [id]);
-  await dbRun('DELETE FROM burned_stories WHERE story_id = ?', [id]);
-  await dbRun('DELETE FROM stories WHERE id = ?', [id]);
+  // DB cascade — 单个 dbBatch 事务（原子，避免中途失败留下半删除状态）
+  await dbBatch([
+    { sql: "DELETE FROM notifications WHERE type IN ('new_story','comment_story','like_story') AND source_id = ?", args: [id] },
+    { sql: 'DELETE FROM likes WHERE target_type = ? AND target_id IN (SELECT id FROM comments WHERE story_id = ?)', args: ['comment', id] },
+    { sql: 'DELETE FROM comments WHERE story_id = ?', args: [id] },
+    { sql: 'DELETE FROM likes WHERE target_type = ? AND target_id = ?', args: ['story', id] },
+    { sql: 'DELETE FROM music_usage WHERE story_id = ?', args: [id] },
+    { sql: 'DELETE FROM music WHERE story_id = ?', args: [id] },
+    { sql: 'DELETE FROM burned_stories WHERE story_id = ?', args: [id] },
+    { sql: 'DELETE FROM stories WHERE id = ?', args: [id] },
+  ]);
   res.json({ message: 'Story deleted successfully' });
 }));
 

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { authMiddleware, AuthRequest } from '../../middleware/auth.js';
 import { adminMiddleware } from '../../middleware/admin.js';
-import { dbGet, dbAll, dbRun } from '../../models/database.js';
+import { dbGet, dbAll, dbRun, dbBatch } from '../../models/database.js';
 import { deleteFromR2 } from '../../services/r2.js';
 
 import { asyncHandler } from '../../utils/asyncHandler.js';
@@ -64,16 +64,17 @@ router.delete('/stories/:id', authMiddleware, adminMiddleware, asyncHandler(asyn
     deleteFromR2(story.cover_image).catch(err => console.error('[Admin Delete] R2 cover delete failed:', err));
   }
 
-  // Cascade: deepest FK first
-  // 3-14: drop notifications pointing at this story (dead links)
-  await dbRun("DELETE FROM notifications WHERE type IN ('new_story','comment_story','like_story') AND source_id = ?", [id]);
-  await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id IN (SELECT id FROM comments WHERE story_id = ?)', ['comment', id]);
-  await dbRun('DELETE FROM comments WHERE story_id = ?', [id]);
-  await dbRun('DELETE FROM likes WHERE target_type = ? AND target_id = ?', ['story', id]);
-  await dbRun('DELETE FROM music_usage WHERE story_id = ?', [id]);
-  await dbRun('DELETE FROM music WHERE story_id = ?', [id]);
-  await dbRun('DELETE FROM burned_stories WHERE story_id = ?', [id]);
-  await dbRun('DELETE FROM stories WHERE id = ?', [id]);
+  // Cascade — 单个 dbBatch 事务（与 story.ts DELETE 一致，防半删除）
+  await dbBatch([
+    { sql: "DELETE FROM notifications WHERE type IN ('new_story','comment_story','like_story') AND source_id = ?", args: [id] },
+    { sql: 'DELETE FROM likes WHERE target_type = ? AND target_id IN (SELECT id FROM comments WHERE story_id = ?)', args: ['comment', id] },
+    { sql: 'DELETE FROM comments WHERE story_id = ?', args: [id] },
+    { sql: 'DELETE FROM likes WHERE target_type = ? AND target_id = ?', args: ['story', id] },
+    { sql: 'DELETE FROM music_usage WHERE story_id = ?', args: [id] },
+    { sql: 'DELETE FROM music WHERE story_id = ?', args: [id] },
+    { sql: 'DELETE FROM burned_stories WHERE story_id = ?', args: [id] },
+    { sql: 'DELETE FROM stories WHERE id = ?', args: [id] },
+  ]);
 
   res.json({ success: true, data: { id } });
 }));

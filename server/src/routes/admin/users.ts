@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { authMiddleware, AuthRequest } from '../../middleware/auth.js';
 import { adminMiddleware } from '../../middleware/admin.js';
-import { dbGet, dbAll, dbRun } from '../../models/database.js';
+import { dbGet, dbAll, dbRun, dbBatch } from '../../models/database.js';
 import { deleteFromR2 } from '../../services/r2.js';
 
 import { asyncHandler } from '../../utils/asyncHandler.js';
@@ -135,28 +135,26 @@ router.delete('/users/:id', authMiddleware, adminMiddleware, asyncHandler(async 
     if (url) deleteFromR2(url).catch(err => console.error('[Admin Delete User] R2 delete failed:', err instanceof Error ? err.message : err));
   }
 
-  await dbRun(
-    "DELETE FROM likes WHERE target_type = 'comment' AND target_id IN (SELECT id FROM comments WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?))",
-    [id]
-  );
-  await dbRun('DELETE FROM comments WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?)', [id]);
-  await dbRun('DELETE FROM music_usage WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?)', [id]);
-  await dbRun('DELETE FROM music WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?)', [id]);
-  await dbRun("DELETE FROM likes WHERE target_type = 'story' AND target_id IN (SELECT id FROM stories WHERE user_id = ?)", [id]);
-  // S4: burned_stories must be removed before stories (FK dependency) — previously omitted,
-  // which made DELETE FROM stories fail with a foreign-key violation for users with burned stories.
-  await dbRun('DELETE FROM burned_stories WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?)', [id]);
-  await dbRun('DELETE FROM stories WHERE user_id = ?', [id]);
-  await dbRun('DELETE FROM comments WHERE user_id = ?', [id]);
-  await dbRun('DELETE FROM subscriptions WHERE user_id = ?', [id]);
-  await dbRun('DELETE FROM orders WHERE user_id = ?', [id]);
-  await dbRun('DELETE FROM likes WHERE user_id = ?', [id]);
-  await dbRun('DELETE FROM music_usage WHERE user_id = ?', [id]);
-  await dbRun('DELETE FROM notifications WHERE user_id = ? OR actor_id = ?', [id, id]);
-  await dbRun('DELETE FROM messages WHERE from_user_id = ? OR to_user_id = ?', [id, id]);
-  await dbRun('DELETE FROM follows WHERE follower_id = ? OR followed_id = ?', [id, id]);
-  await dbRun('DELETE FROM blocked_users WHERE blocker_id = ? OR blocked_id = ?', [id, id]);
-  await dbRun('DELETE FROM users WHERE id = ?', [id]);
+  // 级联删除放进单个 dbBatch 事务（原子，避免中途失败留下半删除状态）
+  await dbBatch([
+    { sql: "DELETE FROM likes WHERE target_type = 'comment' AND target_id IN (SELECT id FROM comments WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?))", args: [id] },
+    { sql: 'DELETE FROM comments WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?)', args: [id] },
+    { sql: 'DELETE FROM music_usage WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?)', args: [id] },
+    { sql: 'DELETE FROM music WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?)', args: [id] },
+    { sql: "DELETE FROM likes WHERE target_type = 'story' AND target_id IN (SELECT id FROM stories WHERE user_id = ?)", args: [id] },
+    { sql: 'DELETE FROM burned_stories WHERE story_id IN (SELECT id FROM stories WHERE user_id = ?)', args: [id] },
+    { sql: 'DELETE FROM stories WHERE user_id = ?', args: [id] },
+    { sql: 'DELETE FROM comments WHERE user_id = ?', args: [id] },
+    { sql: 'DELETE FROM subscriptions WHERE user_id = ?', args: [id] },
+    { sql: 'DELETE FROM orders WHERE user_id = ?', args: [id] },
+    { sql: 'DELETE FROM likes WHERE user_id = ?', args: [id] },
+    { sql: 'DELETE FROM music_usage WHERE user_id = ?', args: [id] },
+    { sql: 'DELETE FROM notifications WHERE user_id = ? OR actor_id = ?', args: [id, id] },
+    { sql: 'DELETE FROM messages WHERE from_user_id = ? OR to_user_id = ?', args: [id, id] },
+    { sql: 'DELETE FROM follows WHERE follower_id = ? OR followed_id = ?', args: [id, id] },
+    { sql: 'DELETE FROM blocked_users WHERE blocker_id = ? OR blocked_id = ?', args: [id, id] },
+    { sql: 'DELETE FROM users WHERE id = ?', args: [id] },
+  ]);
 
   res.json({ success: true, data: { id } });
 }));
