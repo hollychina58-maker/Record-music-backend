@@ -24,6 +24,10 @@ const verifyLimiter = rateLimit({
 const ALLOWED_PROVIDERS = ['alipay'] as const;
 type ProviderName = typeof ALLOWED_PROVIDERS[number];
 
+// 定价基准：1 美金 = 100 分（products.price_cents 现为美金分）。
+// 支付宝按人民币结算，入单/支付时按此汇率把美金分折算成人民币分。
+const USD_TO_CNY_RATE = 7.2; // 1 USD ≈ 7.2 CNY（可按需调整）
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface ProductRow {
   id: number;
@@ -113,7 +117,8 @@ router.post('/orders', authMiddleware, asyncHandler(async (req: AuthRequest, res
     }
 
     const qty = Math.max(1, Math.min(100, parseInt(String(quantity), 10) || 1));
-    let totalCents = product.price_cents * (product.type === 'per_use' ? qty : 1);
+    // price_cents 为美金分，先在美金分域完成全部价格计算，入单时再折算成人民币分
+    let totalCentsUsd = product.price_cents * (product.type === 'per_use' ? qty : 1);
     let isUpgrade = false;
 
     // 3. Check per-use blocked by unlimited subscription
@@ -148,13 +153,14 @@ router.post('/orders', authMiddleware, asyncHandler(async (req: AuthRequest, res
              ORDER BY created_at DESC LIMIT 1`,
             [userId]
           );
-          const rawPaid = lastMonthlyOrder
-            ? (lastMonthlyOrder.total_cents ?? Math.round(lastMonthlyOrder.amount * 100))
+          // 历史订单 total_cents 是人民币分，除以汇率折算回美金分再对比
+          const rawPaidUsd = lastMonthlyOrder
+            ? Math.round((lastMonthlyOrder.total_cents ?? Math.round(lastMonthlyOrder.amount * 100)) / USD_TO_CNY_RATE)
             : activeSub.price_cents;
           // Cap deduction at undiscounted monthly price to prevent coupon-stacking exploit
-          const paidMonthly = Math.min(rawPaid, activeSub.price_cents);
-          // Minimum charge 1 CNY (100 cents) to prevent free upgrades via coupon abuse
-          totalCents = Math.max(100, totalCents - paidMonthly);
+          const paidMonthlyUsd = Math.min(rawPaidUsd, activeSub.price_cents);
+          // Minimum charge $1 (100 cents) to prevent free upgrades via coupon abuse
+          totalCentsUsd = Math.max(100, totalCentsUsd - paidMonthlyUsd);
           isUpgrade = true;
         } else {
           res.status(400).json({
@@ -186,13 +192,19 @@ router.post('/orders', authMiddleware, asyncHandler(async (req: AuthRequest, res
         return;
       }
       const discountPercent = Math.min(99, Math.max(0, coupon.discount_percent || 0));
-      if (discountPercent > 0) totalCents = Math.round(totalCents * (100 - discountPercent) / 100);
-      if (coupon.discount_cents > 0) totalCents = Math.max(0, totalCents - coupon.discount_cents);
+      if (discountPercent > 0) totalCentsUsd = Math.round(totalCentsUsd * (100 - discountPercent) / 100);
+      if (coupon.discount_cents > 0) totalCentsUsd = Math.max(0, totalCentsUsd - coupon.discount_cents);
       appliedCouponCode = code;
     }
 
+    // 最低 $1（100 美金分）：防止优惠券把订单打到 0 金额（支付宝拒绝 0 元订单，订单永久 pending）
+    totalCentsUsd = Math.max(100, totalCentsUsd);
+
     const planType = isUpgrade ? `${product.type}:upgrade` : product.type;
     const purchasedQty = product.type === 'per_use' ? qty : 1;
+
+    // 美金分 → 人民币分（支付宝按 CNY 结算，订单历史 total_cents 保持人民币分）
+    const totalCentsCny = Math.round(totalCentsUsd * USD_TO_CNY_RATE);
 
     const result = await dbRun(
       `INSERT INTO orders (user_id, plan_type, amount, currency, total_cents, payment_provider, status, coupon_code, metadata)
@@ -200,8 +212,8 @@ router.post('/orders', authMiddleware, asyncHandler(async (req: AuthRequest, res
       [
         userId,
         planType,
-        totalCents / 100,
-        totalCents,
+        totalCentsCny / 100,
+        totalCentsCny,
         provider,
         appliedCouponCode,
         JSON.stringify({ quantity: purchasedQty, productId: product.id, musicLimit: product.music_limit ?? null }),
@@ -213,7 +225,7 @@ router.post('/orders', authMiddleware, asyncHandler(async (req: AuthRequest, res
       data: {
         orderId: result.lastInsertRowid,
         productName: product.name,
-        amountCents: totalCents,
+        amountCents: totalCentsCny,
         provider,
       },
     });

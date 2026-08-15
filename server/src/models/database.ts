@@ -314,11 +314,22 @@ export async function initDatabase(): Promise<void> {
   const productCountResult = await client.execute('SELECT COUNT(*) as count FROM products');
   const productCount = Number((productCountResult.rows[0] as any).count);
   if (productCount === 0) {
+    // price_cents 为美金分（1 美金 = 100 分）：$1 / $30 / $288，人民币按汇率折算
     await client.batch([
       { sql: "INSERT INTO products (name, type, price_cents, music_limit, description) VALUES ('按次付费', 'per_use', 100, 1, '1次音乐生成')" },
       { sql: "INSERT INTO products (name, type, price_cents, music_limit, description) VALUES ('月度会员', 'monthly', 3000, 60, '30天内60次音乐生成')" },
       { sql: "INSERT INTO products (name, type, price_cents, music_limit, description) VALUES ('年度会员', 'yearly', 28800, NULL, '365天内无限次音乐生成')" },
     ], 'write');
+  }
+
+  // 一次性迁移：定价基准从人民币改为美金后，存量优惠券的固定减免金额
+  // discount_cents 原为人民币分，折算成美金分（÷7.2）以保持购买力等价。
+  // 用 site_config 标记避免重复迁移（products.price_cents 数字不变、语义改美金分，故不迁移）。
+  const migrated = await client.execute("SELECT 1 FROM site_config WHERE key = 'coupon_cents_to_usd_migrated'");
+  if (migrated.rows.length === 0) {
+    await client.execute('UPDATE coupons SET discount_cents = ROUND(discount_cents / 7.2) WHERE discount_cents IS NOT NULL');
+    await client.execute("INSERT INTO site_config (key, value) VALUES ('coupon_cents_to_usd_migrated', '1')");
+    console.log('[DB] Migrated coupon discount_cents from CNY cents to USD cents');
   }
 
   // 本地 SQLite 默认关闭外键约束，显式开启；Turso 云端默认已开启，此语句可能被忽略。
